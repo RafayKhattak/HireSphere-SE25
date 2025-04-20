@@ -82,3 +82,49 @@ HireSphere-SE25/
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## File Upload System
+
+The application uses MongoDB to store images directly in the database:
+
+### How Image Uploads Work
+
+1. **MongoDB Storage**:
+   - All uploaded files (logos, profile images) are stored directly in MongoDB as Binary Large Objects (BLOBs)
+   - Images are stored in the User document in two fields:
+     - `companyLogoData`: Stores the company logo image
+     - `profileImageData`: Stores the personal profile image
+
+2. **Data Structure**:
+   - Each image is stored as a document with fields:
+     ```
+     {
+       data: Buffer,       // Binary data of the image
+       contentType: String // MIME type (e.g., "image/png")
+     }
+     ```
+
+3. **URL Structure**:
+   - Images are accessed via API endpoints:
+     - Company logos: `/api/employer/logo/:id`
+     - Profile images: `/api/employer/profile-image/:id`
+   - Where `:id` is the user's MongoDB ID
+
+4. **Access Control**:
+   - Only authenticated users can upload files
+   - Only employers can upload logos and profile images
+   - File uploads are validated for type and size
+   - Images are publicly accessible for viewing
+
+This approach provides several benefits:
+- All data is stored in a single place (MongoDB)
+- Simplified database backups (includes all images)
+- No need to manage file system storage
+- Better data integrity (image data is included in database transactions)
+
+## Frontend Image Usage
+
+The application uses the stored image URLs in various places:
+- Company logos appear on the employer profile and job listings
+- Personal profile images appear in the navigation bar and user profile page
+- Images are loaded dynamically based on the URLs stored in the user object

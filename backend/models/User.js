@@ -32,6 +32,36 @@ const userSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    // Added fields for job seeker for AI recommendation
+    skills: [{
+        type: String,
+        trim: true
+    }],
+    experience: [{
+        title: String,
+        company: String,
+        location: String,
+        from: Date,
+        to: Date,
+        current: Boolean,
+        description: String
+    }],
+    education: [{
+        institution: String,
+        degree: String,
+        fieldOfStudy: String,
+        from: Date,
+        to: Date,
+        current: Boolean
+    }],
+    preferredJobTypes: [{
+        type: String,
+        enum: ['full-time', 'part-time', 'contract', 'internship']
+    }],
+    preferredLocations: [{
+        type: String,
+        trim: true
+    }],
     // Employer specific fields
     companyName: {
         type: String,
@@ -43,6 +73,42 @@ const userSchema = new mongoose.Schema({
     companyDescription: {
         type: String,
         trim: true
+    },
+    // Image fields with direct storage in MongoDB
+    companyLogo: {
+        type: String // URL for backward compatibility
+    },
+    companyLogoData: {
+        data: Buffer,
+        contentType: String
+    },
+    profileImage: {
+        type: String // URL for backward compatibility
+    },
+    profileImageData: {
+        data: Buffer,
+        contentType: String
+    },
+    // Added fields for employer company profile
+    companyWebsite: {
+        type: String,
+        trim: true
+    },
+    companySize: {
+        type: String,
+        enum: ['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']
+    },
+    industry: {
+        type: String,
+        trim: true
+    },
+    foundedYear: {
+        type: Number
+    },
+    socialMedia: {
+        linkedin: String,
+        twitter: String,
+        facebook: String
     },
     // Common fields
     phone: {
@@ -62,7 +128,22 @@ const userSchema = new mongoose.Schema({
     bookmarks: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Job'
-    }]
+    }],
+    // For job alerts
+    alertSettings: {
+        enabled: {
+            type: Boolean,
+            default: false
+        },
+        email: {
+            type: Boolean,
+            default: true
+        },
+        inApp: {
+            type: Boolean,
+            default: true
+        }
+    }
 });
 
 // Hash password before saving

@@ -9,11 +9,34 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
 // Create email transporter
+console.log('Setting up email transporter with credentials:', {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD ? '****' + process.env.EMAIL_PASSWORD.slice(-4) : 'missing'
+});
+
 const transporter = nodemailer.createTransport({
     service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // true for 465, false for other ports
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD
+    },
+    tls: {
+        // do not fail on invalid certs
+        rejectUnauthorized: false
+    },
+    debug: true, // Show debug output
+    logger: true  // Log information into console
+});
+
+// Verify transporter on startup
+transporter.verify(function(error, success) {
+    if (error) {
+        console.log('Email transporter verification failed:', error);
+    } else {
+        console.log('Email server is ready to take our messages');
     }
 });
 
@@ -264,10 +287,27 @@ router.post('/forgot-password', async (req, res) => {
             `
         };
 
-        await transporter.sendMail(mailOptions);
-        console.log('Reset email sent successfully');
+        console.log('Attempting to send email with options:', {
+            from: mailOptions.from,
+            to: mailOptions.to,
+            subject: mailOptions.subject
+        });
 
-        res.json({ message: 'Password reset email sent' });
+        try {
+            const info = await transporter.sendMail(mailOptions);
+            console.log('Reset email sent successfully to:', user.email);
+            console.log('Email response:', info);
+            res.json({ message: 'Password reset email sent' });
+        } catch (emailError) {
+            console.error('Error sending reset email:', emailError);
+            console.error('Error details:', JSON.stringify(emailError, null, 2));
+            
+            // For testing purposes, return the reset URL in the response
+            res.status(200).json({ 
+                message: 'Password reset token generated but email could not be sent. Use the link below:',
+                resetUrl: resetUrl
+            });
+        }
     } catch (err) {
         console.error('Password reset request error:', err);
         res.status(500).json({ message: 'Server error', error: err.message });

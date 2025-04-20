@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #1a237e;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f8f8f8;
+            min-height: 100px;
+        }
+        .instructions {
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .code {
+            font-family: monospace;
+            background-color: #f0f0f0;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>File Upload Test</h1>
+    <p>This page lets you test file uploads directly to the backend server.</p>
+    
+    <div class="instructions">
+        <h3>How to find your Auth Token:</h3>
+        <ol>
+            <li>Make sure you're logged in to the app</li>
+            <li>Open browser dev tools (F12 or right-click → Inspect)</li>
+            <li>Go to the "Application" tab (Chrome) or "Storage" tab (Firefox)</li>
+            <li>In the left sidebar, click on "Local Storage"</li>
+            <li>Click on "http://localhost:3000"</li>
+            <li>Find the item named <code class="code">token</code> in the list</li>
+            <li>Copy the value (without quotes)</li>
+            <li>Paste it below and add <code class="code">Bearer </code> at the beginning (include the space)</li>
+        </ol>
+        <p>Example token format: <code class="code">Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6Ikp...</code></p>
+    </div>
+    
+    <form id="uploadForm">
+        <div class="form-group">
+            <label for="token">Auth Token:</label>
+            <input type="text" id="token" style="width: 100%;" placeholder="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI...">
+        </div>
+
+        <div class="form-group">
+            <label for="fileInput">Select Logo File:</label>
+            <input type="file" id="fileInput" accept="image/*">
+        </div>
+
+        <button type="button" id="uploadButton">Upload Logo</button>
+    </form>
+
+    <div class="result" id="result">
+        <p>Results will appear here...</p>
+    </div>
+
+    <script>
+        document.getElementById('uploadButton').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('result');
+            const fileInput = document.getElementById('fileInput');
+            const token = document.getElementById('token').value.trim();
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                resultDiv.innerHTML = '<p style="color: red;">Please select a file first</p>';
+                return;
+            }
+
+            if (!token || !token.startsWith('Bearer ')) {
+                resultDiv.innerHTML = '<p style="color: red;">Please enter a valid auth token starting with "Bearer "</p>';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            resultDiv.innerHTML = `<p>Uploading file: ${file.name} (${file.type}, ${file.size} bytes)...</p>`;
+
+            try {
+                // Create FormData
+                const formData = new FormData();
+                formData.append('logo', file);
+
+                // Log what's in the FormData
+                resultDiv.innerHTML += `<p>FormData contains file: ${file.name}</p>`;
+
+                // Send request - DO NOT SET CONTENT-TYPE HEADER
+                const response = await fetch('http://localhost:5000/api/employer/upload-logo', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Authorization': token
+                    }
+                });
+
+                // Get response as text first (safer)
+                const responseText = await response.text();
+                resultDiv.innerHTML += `<p>Response status: ${response.status}</p>`;
+                
+                try {
+                    // Try to parse as JSON
+                    const data = JSON.parse(responseText);
+                    resultDiv.innerHTML += `<p>Response data:</p><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    
+                    if (data.logoUrl) {
+                        resultDiv.innerHTML += `<p>Image uploaded successfully!</p>`;
+                        resultDiv.innerHTML += `<img src="${data.logoUrl}" style="max-width: 100%; max-height: 200px;">`;
+                    }
+                } catch (e) {
+                    // Not valid JSON, just show the text
+                    resultDiv.innerHTML += `<p>Response (not JSON):</p><pre>${responseText}</pre>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML += `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html> 

@@ -11,13 +11,17 @@ import {
     IconButton,
     CircularProgress,
     Alert,
-    Snackbar
+    Snackbar,
+    Avatar,
+    Pagination
 } from '@mui/material';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import { jobService, bookmarkService } from '../services/api';
 import { Job } from '../types';
 import { useAuth } from '../context/AuthContext';
+import JobFilters from './JobFilters';
+import { Link } from 'react-router-dom';
 
 const JobList: React.FC = () => {
     const navigate = useNavigate();
@@ -25,6 +29,19 @@ const JobList: React.FC = () => {
     const [jobs, setJobs] = useState<Job[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string>('');
+    const [filters, setFilters] = useState<{
+        keywords?: string;
+        location?: string;
+        minSalary?: number;
+        maxSalary?: number;
+        jobType?: string;
+    }>({});
+    const [pagination, setPagination] = useState({
+        page: 1,
+        limit: 5,
+        total: 0,
+        pages: 1
+    });
     const [snackbar, setSnackbar] = useState<{
         open: boolean;
         message: string;
@@ -37,17 +54,42 @@ const JobList: React.FC = () => {
 
     useEffect(() => {
         fetchJobs();
-    }, []);
+    }, [pagination.page, filters]);
 
     const fetchJobs = async () => {
         try {
-            const data = await jobService.getAllJobs();
-            setJobs(data);
+            setLoading(true);
+            const { jobs: fetchedJobs, pagination: paginationData } = await jobService.getAllJobs({
+                ...filters,
+                page: pagination.page,
+                limit: pagination.limit
+            });
+            setJobs(fetchedJobs);
+            setPagination(prevPagination => ({
+                ...prevPagination,
+                total: paginationData.total,
+                pages: paginationData.pages
+            }));
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to fetch jobs');
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleApplyFilters = (newFilters: {
+        keywords?: string;
+        location?: string;
+        minSalary?: number;
+        maxSalary?: number;
+        jobType?: string;
+    }) => {
+        setFilters(newFilters);
+        setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page when filters change
+    };
+
+    const handleChangePage = (event: React.ChangeEvent<unknown>, value: number) => {
+        setPagination(prev => ({ ...prev, page: value }));
     };
 
     const handleBookmark = async (jobId: string) => {
@@ -98,22 +140,6 @@ const JobList: React.FC = () => {
         setSnackbar({ ...snackbar, open: false });
     };
 
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-                <CircularProgress />
-            </Box>
-        );
-    }
-
-    if (error) {
-        return (
-            <Alert severity="error" sx={{ mt: 2 }}>
-                {error}
-            </Alert>
-        );
-    }
-
     return (
         <Box>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -130,58 +156,110 @@ const JobList: React.FC = () => {
                 )}
             </Box>
 
-            <Grid container spacing={3}>
-                {jobs.map((job) => (
-                    <Grid item xs={12} key={job._id}>
-                        <Card>
-                            <CardContent>
-                                <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                                    <Box flex={1}>
-                                        <Typography variant="h6" component="h2" gutterBottom>
-                                            {job.title}
-                                        </Typography>
-                                        <Typography color="textSecondary" gutterBottom>
-                                            {typeof job.employer === 'object' ? job.employer.companyName : 'Company Name'}
-                                        </Typography>
-                                        <Typography variant="body2" color="textSecondary" paragraph>
-                                            {job.location} • {job.type.charAt(0).toUpperCase() + job.type.slice(1)}
-                                        </Typography>
-                                        <Typography variant="body2" paragraph>
-                                            {job.description}
-                                        </Typography>
-                                        <Box display="flex" gap={1} mb={2}>
-                                            <Chip
-                                                label={formatSalary(job.salary?.min, job.salary?.max, job.salary?.currency)}
-                                                color="primary"
-                                                variant="outlined"
-                                            />
-                                        </Box>
-                                        <Button
-                                            variant="outlined"
-                                            size="small"
-                                            onClick={() => navigate(`/jobs/${job._id}`)}
-                                        >
-                                            View Details
-                                        </Button>
-                                    </Box>
-                                    {user?.type === 'jobseeker' && (
-                                        <IconButton
-                                            onClick={() => handleBookmark(job._id)}
-                                            color="primary"
-                                        >
-                                            {job.bookmarkedBy?.includes(user.id) ? (
-                                                <BookmarkIcon />
-                                            ) : (
-                                                <BookmarkBorderIcon />
+            <JobFilters onApplyFilters={handleApplyFilters} />
+
+            {loading ? (
+                <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+                    <CircularProgress />
+                </Box>
+            ) : error ? (
+                <Alert severity="error" sx={{ mt: 2 }}>
+                    {error}
+                </Alert>
+            ) : jobs.length === 0 ? (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                    No jobs found matching your criteria. Try adjusting your filters.
+                </Alert>
+            ) : (
+                <>
+                    <Grid container spacing={3}>
+                        {jobs.map((job) => (
+                            <Grid item xs={12} key={job._id}>
+                                <Card>
+                                    <CardContent>
+                                        <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                                            <Box sx={{ display: 'flex', alignItems: 'flex-start', flex: 1 }}>
+                                                <Avatar 
+                                                    src={typeof job.employer === 'object' ? job.employer.companyLogo : ''} 
+                                                    alt={typeof job.employer === 'object' ? job.employer.companyName : 'Company Logo'}
+                                                    sx={{ width: 60, height: 60, mr: 2, mt: 0.5 }}
+                                                >
+                                                    {(typeof job.employer === 'object' && job.employer.companyName) ? 
+                                                        job.employer.companyName.charAt(0).toUpperCase() : 'C'}
+                                                </Avatar>
+                                                <Box flex={1}>
+                                                    <Typography variant="h6" component="h2" gutterBottom>
+                                                        {job.title}
+                                                    </Typography>
+                                                    <Typography 
+                                                        color="primary" 
+                                                        gutterBottom 
+                                                        fontWeight="500" 
+                                                        sx={{ cursor: 'pointer', textDecoration: 'none' }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (typeof job.employer === 'object' && job.employer._id) {
+                                                                navigate(`/company/${job.employer._id}`);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {typeof job.employer === 'object' ? job.employer.companyName : 'Company Name'}
+                                                    </Typography>
+                                                    <Typography variant="body2" color="textSecondary" paragraph>
+                                                        {job.location} • {job.type.charAt(0).toUpperCase() + job.type.slice(1)}
+                                                    </Typography>
+                                                    <Typography variant="body2" paragraph>
+                                                        {job.description.length > 150 ? 
+                                                            `${job.description.substring(0, 150)}...` : 
+                                                            job.description}
+                                                    </Typography>
+                                                    <Box display="flex" gap={1} mb={2}>
+                                                        <Chip
+                                                            label={formatSalary(job.salary?.min, job.salary?.max, job.salary?.currency)}
+                                                            color="primary"
+                                                            variant="outlined"
+                                                        />
+                                                    </Box>
+                                                    <Button
+                                                        variant="outlined"
+                                                        size="small"
+                                                        onClick={() => navigate(`/jobs/${job._id}`)}
+                                                    >
+                                                        View Details
+                                                    </Button>
+                                                </Box>
+                                            </Box>
+                                            {user?.type === 'jobseeker' && (
+                                                <IconButton
+                                                    onClick={() => handleBookmark(job._id)}
+                                                    color="primary"
+                                                >
+                                                    {job.bookmarkedBy?.includes(user.id) ? (
+                                                        <BookmarkIcon />
+                                                    ) : (
+                                                        <BookmarkBorderIcon />
+                                                    )}
+                                                </IconButton>
                                             )}
-                                        </IconButton>
-                                    )}
-                                </Box>
-                            </CardContent>
-                        </Card>
+                                        </Box>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        ))}
                     </Grid>
-                ))}
-            </Grid>
+
+                    {pagination.pages > 1 && (
+                        <Box display="flex" justifyContent="center" mt={4} mb={2}>
+                            <Pagination 
+                                count={pagination.pages} 
+                                page={pagination.page} 
+                                onChange={handleChangePage} 
+                                color="primary" 
+                            />
+                        </Box>
+                    )}
+                </>
+            )}
 
             <Snackbar
                 open={snackbar.open}

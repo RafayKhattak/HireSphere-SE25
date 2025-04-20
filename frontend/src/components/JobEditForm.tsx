@@ -11,13 +11,15 @@ import {
     Alert,
     Grid,
     CircularProgress,
-    MenuItem
+    MenuItem,
+    InputAdornment
 } from '@mui/material';
 import { jobService } from '../services/api';
 import { Job, JobFormData } from '../types';
 
 const validationSchema = yup.object({
     title: yup.string().required('Title is required'),
+    company: yup.string().required('Company name is required'),
     description: yup.string().required('Description is required'),
     requirements: yup.string().required('Requirements are required'),
     salary: yup.object({
@@ -38,16 +40,17 @@ const JobEditForm: React.FC = () => {
     const formik = useFormik<JobFormData>({
         initialValues: {
             title: '',
+            company: '',
             description: '',
             requirements: '',
             salary: {
                 min: 0,
                 max: 0,
-                currency: 'USD'
+                currency: 'PKR'
             },
             location: '',
             type: 'full-time'
-        },
+        } as JobFormData,
         validationSchema: validationSchema,
         onSubmit: async (values) => {
             if (!id) return;
@@ -72,19 +75,24 @@ const JobEditForm: React.FC = () => {
             const response = await jobService.getJobById(id!);
             formik.setValues({
                 title: response.title,
+                company: response.company || '',
                 description: response.description,
                 requirements: response.requirements,
-                salary: response.salary,
+                salary: {
+                    min: response.salary.min,
+                    max: response.salary.max,
+                    currency: response.salary.currency || 'PKR'
+                },
                 location: response.location,
                 type: response.type
-            });
+            } as JobFormData);
         } catch (error: any) {
             console.error('Error fetching job details:', error);
             setError(error.response?.data?.message || 'Failed to fetch job details');
         } finally {
             setLoading(false);
         }
-    }, [id]);
+    }, [id, formik]);
 
     useEffect(() => {
         fetchJobDetails();
@@ -131,15 +139,30 @@ const JobEditForm: React.FC = () => {
                         <Grid item xs={12}>
                             <TextField
                                 fullWidth
+                                id="company"
+                                name="company"
+                                label="Company"
+                                value={formik.values.company}
+                                onChange={formik.handleChange}
+                                error={formik.touched.company && Boolean(formik.errors.company)}
+                                helperText={(formik.touched.company && formik.errors.company) || "Company name is automatically set from your profile"}
+                                disabled={true}
+                            />
+                        </Grid>
+
+                        <Grid item xs={12}>
+                            <TextField
+                                fullWidth
                                 id="description"
                                 name="description"
                                 label="Job Description"
                                 multiline
-                                rows={4}
+                                rows={6}
+                                placeholder="Enter detailed job description. Use line breaks for better formatting."
                                 value={formik.values.description}
                                 onChange={formik.handleChange}
                                 error={formik.touched.description && Boolean(formik.errors.description)}
-                                helperText={formik.touched.description && formik.errors.description}
+                                helperText={(formik.touched.description && formik.errors.description) || "Use line breaks to separate paragraphs. This will be displayed with proper formatting."}
                             />
                         </Grid>
 
@@ -150,11 +173,12 @@ const JobEditForm: React.FC = () => {
                                 name="requirements"
                                 label="Requirements"
                                 multiline
-                                rows={4}
+                                rows={6}
+                                placeholder="Enter job requirements. Use a new line for each requirement for better formatting."
                                 value={formik.values.requirements}
                                 onChange={formik.handleChange}
                                 error={formik.touched.requirements && Boolean(formik.errors.requirements)}
-                                helperText={formik.touched.requirements && formik.errors.requirements}
+                                helperText={(formik.touched.requirements && formik.errors.requirements) || "Consider adding each requirement on a new line for a cleaner appearance."}
                             />
                         </Grid>
 
@@ -169,6 +193,9 @@ const JobEditForm: React.FC = () => {
                                 onChange={formik.handleChange}
                                 error={formik.touched.salary?.min && Boolean(formik.errors.salary?.min)}
                                 helperText={formik.touched.salary?.min && formik.errors.salary?.min}
+                                InputProps={{
+                                    startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
+                                }}
                             />
                         </Grid>
 
@@ -183,6 +210,9 @@ const JobEditForm: React.FC = () => {
                                 onChange={formik.handleChange}
                                 error={formik.touched.salary?.max && Boolean(formik.errors.salary?.max)}
                                 helperText={formik.touched.salary?.max && formik.errors.salary?.max}
+                                InputProps={{
+                                    startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
+                                }}
                             />
                         </Grid>
 
@@ -192,11 +222,17 @@ const JobEditForm: React.FC = () => {
                                 id="salary.currency"
                                 name="salary.currency"
                                 label="Currency"
+                                select
                                 value={formik.values.salary.currency}
                                 onChange={formik.handleChange}
                                 error={formik.touched.salary?.currency && Boolean(formik.errors.salary?.currency)}
                                 helperText={formik.touched.salary?.currency && formik.errors.salary?.currency}
-                            />
+                            >
+                                <MenuItem value="PKR">Pakistani Rupee (PKR)</MenuItem>
+                                <MenuItem value="USD">US Dollar (USD)</MenuItem>
+                                <MenuItem value="EUR">Euro (EUR)</MenuItem>
+                                <MenuItem value="GBP">British Pound (GBP)</MenuItem>
+                            </TextField>
                         </Grid>
 
                         <Grid item xs={12} sm={6}>

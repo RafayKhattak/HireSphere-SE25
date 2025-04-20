@@ -23,7 +23,7 @@ const PostJob = () => {
         salary: {
             min: '',
             max: '',
-            currency: 'USD'
+            currency: 'PKR'
         },
         location: '',
         type: 'full-time',

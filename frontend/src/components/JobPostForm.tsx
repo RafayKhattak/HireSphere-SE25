@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as yup from 'yup';
@@ -14,10 +14,12 @@ import {
     InputLabel,
     Select,
     MenuItem,
-    InputAdornment
+    InputAdornment,
+    CircularProgress
 } from '@mui/material';
 import { jobService } from '../services/api';
-import { JobFormData } from '../types';
+import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 const validationSchema = yup.object({
     title: yup
@@ -56,17 +58,42 @@ const validationSchema = yup.object({
 
 const JobPostForm: React.FC = () => {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [error, setError] = React.useState<string>('');
+    const [loading, setLoading] = React.useState<boolean>(true);
+    const [companyName, setCompanyName] = React.useState<string>('');
+
+    useEffect(() => {
+        const fetchEmployerProfile = async () => {
+            try {
+                setLoading(true);
+                const response = await api.get('/employer/profile');
+                setCompanyName(response.data.companyName || '');
+            } catch (err: any) {
+                console.error('Error fetching employer profile:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (user && user.type === 'employer') {
+            fetchEmployerProfile();
+        } else {
+            setLoading(false);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user]);
 
     const formik = useFormik({
         initialValues: {
             title: '',
+            company: companyName,
             description: '',
             requirements: '',
             salary: {
                 min: 0,
                 max: 0,
-                currency: 'USD'
+                currency: 'PKR'
             },
             location: '',
             type: 'full-time' as const
@@ -74,13 +101,31 @@ const JobPostForm: React.FC = () => {
         validationSchema: validationSchema,
         onSubmit: async (values) => {
             try {
-                await jobService.createJob(values);
+                await jobService.createJob({
+                    ...values,
+                    company: companyName
+                });
                 navigate('/jobs');
             } catch (err: any) {
                 setError(err.response?.data?.message || 'An error occurred while posting the job');
             }
         },
     });
+
+    useEffect(() => {
+        if (companyName) {
+            formik.setFieldValue('company', companyName);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [companyName]);
+
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
 
     return (
         <Box
@@ -101,6 +146,9 @@ const JobPostForm: React.FC = () => {
             >
                 <Typography variant="h5" component="h1" gutterBottom align="center">
                     Post a New Job
+                </Typography>
+                <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
+                    Your company name will be automatically added to the job posting from your profile.
                 </Typography>
                 {error && (
                     <Alert severity="error" sx={{ mb: 2 }}>
@@ -128,11 +176,12 @@ const JobPostForm: React.FC = () => {
                                 name="description"
                                 label="Job Description"
                                 multiline
-                                rows={4}
+                                rows={6}
+                                placeholder="Enter detailed job description. Use line breaks for better formatting."
                                 value={formik.values.description}
                                 onChange={formik.handleChange}
                                 error={formik.touched.description && Boolean(formik.errors.description)}
-                                helperText={formik.touched.description && formik.errors.description}
+                                helperText={(formik.touched.description && formik.errors.description) || "Use line breaks to separate paragraphs. This will be displayed with proper formatting."}
                             />
                         </Grid>
                         <Grid item xs={12}>
@@ -142,14 +191,15 @@ const JobPostForm: React.FC = () => {
                                 name="requirements"
                                 label="Job Requirements"
                                 multiline
-                                rows={4}
+                                rows={6}
+                                placeholder="Enter job requirements. Use a new line for each requirement for better formatting."
                                 value={formik.values.requirements}
                                 onChange={formik.handleChange}
                                 error={formik.touched.requirements && Boolean(formik.errors.requirements)}
-                                helperText={formik.touched.requirements && formik.errors.requirements}
+                                helperText={(formik.touched.requirements && formik.errors.requirements) || "Consider adding each requirement on a new line for a cleaner appearance."}
                             />
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid item xs={12} sm={4}>
                             <TextField
                                 fullWidth
                                 id="salary.min"
@@ -161,11 +211,11 @@ const JobPostForm: React.FC = () => {
                                 error={formik.touched.salary?.min && Boolean(formik.errors.salary?.min)}
                                 helperText={formik.touched.salary?.min && formik.errors.salary?.min}
                                 InputProps={{
-                                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                                    startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
                                 }}
                             />
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid item xs={12} sm={4}>
                             <TextField
                                 fullWidth
                                 id="salary.max"
@@ -177,9 +227,27 @@ const JobPostForm: React.FC = () => {
                                 error={formik.touched.salary?.max && Boolean(formik.errors.salary?.max)}
                                 helperText={formik.touched.salary?.max && formik.errors.salary?.max}
                                 InputProps={{
-                                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                                    startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
                                 }}
                             />
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                            <TextField
+                                fullWidth
+                                id="salary.currency"
+                                name="salary.currency"
+                                label="Currency"
+                                select
+                                value={formik.values.salary.currency}
+                                onChange={formik.handleChange}
+                                error={formik.touched.salary?.currency && Boolean(formik.errors.salary?.currency)}
+                                helperText={formik.touched.salary?.currency && formik.errors.salary?.currency}
+                            >
+                                <MenuItem value="PKR">Pakistani Rupee (PKR)</MenuItem>
+                                <MenuItem value="USD">US Dollar (USD)</MenuItem>
+                                <MenuItem value="EUR">Euro (EUR)</MenuItem>
+                                <MenuItem value="GBP">British Pound (GBP)</MenuItem>
+                            </TextField>
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <FormControl fullWidth>

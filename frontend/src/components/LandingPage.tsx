@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import {
     Box,
     Button,
@@ -56,6 +57,7 @@ const LandingPage: React.FC = () => {
     const navigate = useNavigate();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const { isAuthenticated, user } = useAuth();
 
     return (
         <Box>
@@ -95,21 +97,23 @@ const LandingPage: React.FC = () => {
                                     Connect with top tech companies and opportunities using AI-powered job matching
                                 </Typography>
                                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                                    <Button
-                                        variant="contained"
-                                        size="large"
-                                        endIcon={<ArrowForwardIcon />}
-                                        onClick={() => navigate('/register')}
-                                        sx={{
-                                            bgcolor: 'white',
-                                            color: 'primary.main',
-                                            '&:hover': {
-                                                bgcolor: 'grey.100'
-                                            }
-                                        }}
-                                    >
-                                        Get Started
-                                    </Button>
+                                    {!isAuthenticated && (
+                                        <Button
+                                            variant="contained"
+                                            size="large"
+                                            endIcon={<ArrowForwardIcon />}
+                                            onClick={() => navigate('/register')}
+                                            sx={{
+                                                bgcolor: 'white',
+                                                color: 'primary.main',
+                                                '&:hover': {
+                                                    bgcolor: 'grey.100'
+                                                }
+                                            }}
+                                        >
+                                            Get Started
+                                        </Button>
+                                    )}
                                     <Button
                                         variant="outlined"
                                         size="large"
@@ -195,47 +199,46 @@ const LandingPage: React.FC = () => {
                 </Grid>
             </Container>
 
-            {/* CTA Section */}
-            <Box
-                sx={{
-                    bgcolor: 'primary.main',
-                    color: 'white',
-                    py: 8,
-                    textAlign: 'center'
-                }}
-            >
-                <Container maxWidth="md">
-                    <Typography
-                        variant="h3"
-                        component="h2"
-                        gutterBottom
-                        sx={{ fontWeight: 700 }}
-                    >
-                        Ready to Start Your Journey?
-                    </Typography>
-                    <Typography
-                        variant="h6"
-                        sx={{ mb: 4, opacity: 0.9 }}
-                    >
-                        Join thousands of tech professionals who found their dream jobs through HireSphere
-                    </Typography>
-                    <Button
-                        variant="contained"
-                        size="large"
-                        endIcon={<ArrowForwardIcon />}
-                        onClick={() => navigate('/register')}
-                        sx={{
-                            bgcolor: 'white',
-                            color: 'primary.main',
-                            '&:hover': {
-                                bgcolor: 'grey.100'
-                            }
-                        }}
-                    >
-                        Create Your Account
-                    </Button>
-                </Container>
-            </Box>
+            {/* Call to Action Section */}
+            {!isAuthenticated && (
+                <Box sx={{ py: 8, bgcolor: 'background.paper' }}>
+                    <Container maxWidth="lg">
+                        <Grid container spacing={4} alignItems="center">
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="h3" component="h2" gutterBottom>
+                                    Create Your Account Today
+                                </Typography>
+                                <Typography variant="body1" paragraph color="text.secondary">
+                                    Join thousands of professionals and companies on HireSphere. Create your profile, connect with opportunities, and take your career to the next level.
+                                </Typography>
+                                <Button 
+                                    variant="contained" 
+                                    size="large" 
+                                    onClick={() => navigate('/register')}
+                                    sx={{ mt: 2 }}
+                                >
+                                    Sign Up Now
+                                </Button>
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                                <Box sx={{ position: 'relative', height: { xs: 300, md: 400 } }}>
+                                    <Box
+                                        component="img"
+                                        src="/images/cta-image.jpg"
+                                        alt="Create an account"
+                                        sx={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            borderRadius: 2
+                                        }}
+                                    />
+                                </Box>
+                            </Grid>
+                        </Grid>
+                    </Container>
+                </Box>
+            )}
 
             {/* Footer */}
             <Box

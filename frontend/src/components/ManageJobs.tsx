@@ -18,11 +18,15 @@ import {
     DialogContent,
     DialogActions,
     Alert,
-    Snackbar
+    Snackbar,
+    Badge
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import PeopleIcon from '@mui/icons-material/People';
 import axios from 'axios';
+import { applicationService } from '../services/api';
 
 interface Job {
     _id: string;
@@ -32,6 +36,7 @@ interface Job {
     type: string;
     status: string;
     createdAt: string;
+    applicationCount?: number;
 }
 
 const ManageJobs: React.FC = () => {
@@ -70,7 +75,20 @@ const ManageJobs: React.FC = () => {
                     'Content-Type': 'application/json'
                 }
             });
-            setJobs(response.data);
+            
+            const jobsWithCounts = await Promise.all(
+                response.data.map(async (job: Job) => {
+                    try {
+                        const count = await applicationService.countJobApplications(job._id);
+                        return { ...job, applicationCount: count };
+                    } catch (err) {
+                        console.error(`Error fetching application count for job ${job._id}:`, err);
+                        return { ...job, applicationCount: 0 };
+                    }
+                })
+            );
+            
+            setJobs(jobsWithCounts);
             setLoading(false);
         } catch (err: any) {
             console.error('Error fetching jobs:', err);
@@ -126,6 +144,10 @@ const ManageJobs: React.FC = () => {
 
     const handleCloseSnackbar = () => {
         setSnackbar({ ...snackbar, open: false });
+    };
+
+    const handleViewApplications = (jobId: string) => {
+        navigate(`/jobs/${jobId}/applications`);
     };
 
     if (loading) {
@@ -187,12 +209,30 @@ const ManageJobs: React.FC = () => {
                                     <IconButton
                                         color="primary"
                                         onClick={() => handleEdit(job._id)}
+                                        title="Edit Job"
                                     >
                                         <EditIcon />
                                     </IconButton>
                                     <IconButton
+                                        color="info"
+                                        onClick={() => navigate(`/jobs/${job._id}/analytics`)}
+                                        title="View Analytics"
+                                    >
+                                        <AssessmentIcon />
+                                    </IconButton>
+                                    <IconButton
+                                        color="secondary"
+                                        onClick={() => handleViewApplications(job._id)}
+                                        title="View Applications"
+                                    >
+                                        <Badge badgeContent={job.applicationCount || 0} color="primary">
+                                            <PeopleIcon />
+                                        </Badge>
+                                    </IconButton>
+                                    <IconButton
                                         color="error"
                                         onClick={() => handleDeleteClick(job._id)}
+                                        title="Delete Job"
                                     >
                                         <DeleteIcon />
                                     </IconButton>

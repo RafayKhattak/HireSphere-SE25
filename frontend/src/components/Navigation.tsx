@@ -29,7 +29,10 @@ import {
     Business as BusinessIcon,
     Bookmark as BookmarkIcon,
     ExitToApp as LogoutIcon,
-    Info as InfoIcon
+    Info as InfoIcon,
+    Assessment as AssessmentIcon,
+    MonetizationOn as MoneyIcon,
+    VideoCameraFront as VideoIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import { Link as RouterLink } from 'react-router-dom';
@@ -85,13 +88,22 @@ const Navigation: React.FC = () => {
     const menuItems = isAuthenticated ? [
         { text: 'Jobs', icon: <WorkIcon />, path: '/jobs' },
         ...(user?.type === 'jobseeker' ? [
+            { text: 'Recommendations', icon: <WorkIcon />, path: '/recommendations' },
+            { text: 'Job Alerts', icon: <WorkIcon />, path: '/job-alerts' },
+            { text: 'Skill Assessments', icon: <AssessmentIcon />, path: '/assessments' },
+            { text: 'Salary Insights', icon: <MoneyIcon />, path: '/jobseeker/salary-insights' },
             { text: 'My Applications', icon: <PersonIcon />, path: '/applications' },
-            { text: 'Bookmarks', icon: <BookmarkIcon />, path: '/jobs/bookmarks' }
+            { text: 'My Interviews', icon: <VideoIcon />, path: '/jobseeker/interviews' },
+            { text: 'Bookmarks', icon: <BookmarkIcon />, path: '/jobs/bookmarks' },
+            { text: 'Messages', icon: <PersonIcon />, path: '/messages' }
         ] : []),
         ...(user?.type === 'employer' ? [
-            { text: 'My Company', icon: <BusinessIcon />, path: '/company' },
+            { text: 'Company Profile', icon: <BusinessIcon />, path: '/employer/profile' },
             { text: 'Post Job', icon: <WorkIcon />, path: '/jobs/post' },
-            { text: 'Manage Jobs', icon: <WorkIcon />, path: '/jobs/manage' }
+            { text: 'Manage Jobs', icon: <WorkIcon />, path: '/jobs/manage' },
+            { text: 'Manage Interviews', icon: <VideoIcon />, path: '/employer/interviews' },
+            { text: 'Find Candidates', icon: <PersonIcon />, path: '/employer/candidates' },
+            { text: 'Messages', icon: <PersonIcon />, path: '/messages' }
         ] : [])
     ] : [
         { text: 'About Us', icon: <InfoIcon />, path: '/about' }
@@ -178,7 +190,17 @@ const Navigation: React.FC = () => {
                                     ))}
                                     <Tooltip title="Open settings">
                                         <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
-                                            <Avatar alt={user?.name} src="/static/images/avatar/2.jpg" />
+                                            <Avatar 
+                                                alt={user?.name} 
+                                                src={user?.profileImage || ''}
+                                                sx={{ 
+                                                    width: 40, 
+                                                    height: 40,
+                                                    bgcolor: 'primary.main' 
+                                                }}
+                                            >
+                                                {!user?.profileImage && (user?.name?.charAt(0) || 'U')}
+                                            </Avatar>
                                         </IconButton>
                                     </Tooltip>
                                     <Menu

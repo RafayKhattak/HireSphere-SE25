@@ -40,7 +40,7 @@ const EditJob: React.FC = () => {
         salary: {
             min: 0,
             max: 0,
-            currency: 'USD'
+            currency: 'PKR'
         },
         description: '',
         requirements: '',

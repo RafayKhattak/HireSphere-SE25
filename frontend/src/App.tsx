@@ -19,6 +19,24 @@ import ForgotPassword from './components/ForgotPassword';
 import ResetPassword from './components/ResetPassword';
 import PrivateRoute from './components/PrivateRoute';
 import BookmarkedJobs from './components/BookmarkedJobs';
+import Conversations from './components/Conversations';
+import Chat from './components/Chat';
+import EmployerProfile from './components/EmployerProfile';
+import JobPostAnalytics from './components/JobPostAnalytics';
+import JobAlerts from './components/JobAlerts';
+import JobRecommendations from './components/JobRecommendations';
+import ApplicationTracking from './components/ApplicationTracking';
+import EmployerPersonalProfile from './components/EmployerPersonalProfile';
+import JobSeekerProfile from './components/JobSeekerProfile';
+import JobApplications from './components/JobApplications';
+import CandidateSearch from './components/CandidateSearch';
+import BrowseJobsPage from './pages/BrowseJobsPage';
+import SkillAssessments from './components/SkillAssessments';
+import SkillAssessmentDetails from './components/SkillAssessmentDetails';
+import SalaryInsights from './components/SalaryInsights';
+import CompanyProfile from './components/CompanyProfile';
+import EmployerInterviews from './components/EmployerInterviews';
+import JobSeekerInterviews from './components/JobSeekerInterviews';
 
 const theme = createTheme({
     palette: {
@@ -105,7 +123,7 @@ const App: React.FC = () => {
                             path="/jobs"
                             element={
                                 <Layout>
-                                    <JobList />
+                                    <BrowseJobsPage />
                                 </Layout>
                             }
                         />
@@ -170,6 +188,202 @@ const App: React.FC = () => {
                         <Route path="/profile" element={<Layout><UserProfile /></Layout>} />
                         <Route path="/forgot-password" element={<ForgotPassword />} />
                         <Route path="/reset-password/:token" element={<ResetPassword />} />
+
+                        {/* New Routes for Chat (Sprint 2) */}
+                        <Route
+                            path="/messages"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker', 'employer']}>
+                                    <Layout>
+                                        <Conversations />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/messages/:userId"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker', 'employer']}>
+                                    <Layout>
+                                        <Chat />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        
+                        {/* Employer Routes */}
+                        <Route
+                            path="/employer/profile"
+                            element={
+                                <PrivateRoute allowedUserTypes={['employer']}>
+                                    <Layout>
+                                        <EmployerProfile />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/employer/interviews"
+                            element={
+                                <PrivateRoute allowedUserTypes={['employer']}>
+                                    <Layout>
+                                        <EmployerInterviews />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/employer/personal-profile"
+                            element={
+                                <PrivateRoute allowedUserTypes={['employer']}>
+                                    <Layout>
+                                        <EmployerPersonalProfile />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/jobs/:jobId/analytics"
+                            element={
+                                <PrivateRoute allowedUserTypes={['employer']}>
+                                    <Layout>
+                                        <JobPostAnalytics />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/jobs/:id/applications"
+                            element={
+                                <PrivateRoute allowedUserTypes={['employer']}>
+                                    <Layout>
+                                        <JobApplications />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/employer/candidates"
+                            element={
+                                <PrivateRoute allowedUserTypes={['employer']}>
+                                    <Layout>
+                                        <CandidateSearch />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        
+                        {/* Job Seeker Routes */}
+                        <Route
+                            path="/job-alerts"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker']}>
+                                    <Layout>
+                                        <JobAlerts />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/assessments"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker']}>
+                                    <Layout>
+                                        <SkillAssessments />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/assessments/:id"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker']}>
+                                    <Layout>
+                                        <SkillAssessmentDetails />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/recommendations"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker']}>
+                                    <Layout>
+                                        <JobRecommendations />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/jobseeker/interviews"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker']}>
+                                    <Layout>
+                                        <JobSeekerInterviews />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/jobseeker/profile"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker']}>
+                                    <Layout>
+                                        <JobSeekerProfile />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/jobseeker/applications"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker']}>
+                                    <Layout>
+                                        <ApplicationTracking />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/jobseeker/job-alerts"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker']}>
+                                    <Layout>
+                                        <JobAlerts />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/jobseeker/recommendations"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker']}>
+                                    <Layout>
+                                        <JobRecommendations />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/jobseeker/salary-insights"
+                            element={
+                                <PrivateRoute allowedUserTypes={['jobseeker']}>
+                                    <Layout>
+                                        <SalaryInsights />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+
+                        {/* Public company profile */}
+                        <Route
+                            path="/company/:employerId"
+                            element={
+                                <Layout>
+                                    <CompanyProfile />
+                                </Layout>
+                            }
+                        />
                     </Routes>
                 </Router>
             </AuthProvider>
