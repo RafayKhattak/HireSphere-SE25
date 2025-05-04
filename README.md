@@ -1,7 +1,5 @@
 # HireSphere: AI-Powered Tech Job Portal 🚀
 
-[![HireSphere Logo](placeholder.png)] <!-- Optional: Replace placeholder.png with an actual logo URL if you have one -->
-
 **HireSphere** is a modern, feature-rich job portal specifically designed for the technology sector. It leverages Artificial Intelligence to enhance the job search and recruitment process for job seekers, employers, and administrators. Features include intelligent job recommendations, AI-driven skill assessments, automated resume parsing, candidate ranking, and more.
 
 ---
