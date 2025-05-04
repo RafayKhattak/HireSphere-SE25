@@ -3,7 +3,6 @@ import {
     Box,
     Container,
     Typography,
-    Grid,
     Card,
     CardContent,
     Avatar,
@@ -13,17 +12,16 @@ import {
     ListItemIcon,
     ListItemText,
     Paper,
-    useTheme
+    useTheme,
+    IconButton
 } from '@mui/material';
-import {
-    School as SchoolIcon,
-    Group as GroupIcon,
-    Assignment as AssignmentIcon,
-    Code as CodeIcon,
-    Chat as ChatIcon,
-    GitHub as GitHubIcon,
-    CheckCircle as CheckCircleIcon
-} from '@mui/icons-material';
+import SchoolIcon from '@mui/icons-material/School';
+import GroupIcon from '@mui/icons-material/Group';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import CodeIcon from '@mui/icons-material/Code';
+import ChatIcon from '@mui/icons-material/Chat';
+import GitHubIcon from '@mui/icons-material/GitHub';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 const AboutUs: React.FC = () => {
     const theme = useTheme();
@@ -106,37 +104,24 @@ const AboutUs: React.FC = () => {
                     <Typography variant="h4" gutterBottom sx={{ color: 'primary.main', mb: 4 }}>
                         Our Team
                     </Typography>
-                    <Grid container spacing={4}>
-                        {teamMembers.map((member) => (
-                            <Grid item xs={12} md={4} key={member.name}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', margin: theme => theme.spacing(-1.5) }}>
+                        {teamMembers.map((member, index) => (
+                            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%', md: '33.33%' } }} key={index}>
                                 <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                                    <CardContent>
-                                        <Box display="flex" flexDirection="column" alignItems="center" mb={2}>
-                                            <Avatar
-                                                sx={{
-                                                    width: 120,
-                                                    height: 120,
-                                                    bgcolor: 'primary.main',
-                                                    mb: 2
-                                                }}
-                                            >
-                                                <Typography variant="h4">
-                                                    {member.name.split(' ').map(n => n[0]).join('')}
-                                                </Typography>
-                                            </Avatar>
-                                            <Typography variant="h5" gutterBottom>
-                                                {member.name}
-                                            </Typography>
-                                            <Typography variant="subtitle1" color="primary" gutterBottom>
-                                                {member.role}
-                                            </Typography>
-                                        </Box>
+                                    <CardContent sx={{ flexGrow: 1, textAlign: 'center' }}>
+                                        <Typography variant="h5" gutterBottom sx={{ mt: 2 }}>
+                                            {member.name}
+                                        </Typography>
+                                        <Typography variant="subtitle1" color="primary" gutterBottom>
+                                            {member.role}
+                                        </Typography>
                                         <Divider sx={{ my: 2 }} />
-                                        <List>
-                                            {member.responsibilities.map((responsibility) => (
-                                                <ListItem key={responsibility}>
-                                                    <ListItemIcon>
-                                                        <CheckCircleIcon color="primary" />
+                                        <Typography variant="h6" sx={{ mb: 1, textAlign: 'left' }}>Responsibilities:</Typography>
+                                        <List dense sx={{ textAlign: 'left' }}>
+                                            {member.responsibilities.map((responsibility, rIndex) => (
+                                                <ListItem key={rIndex} sx={{ py: 0.5 }}>
+                                                    <ListItemIcon sx={{ minWidth: 32 }}>
+                                                        <CheckCircleIcon color="primary" fontSize="small" />
                                                     </ListItemIcon>
                                                     <ListItemText primary={responsibility} />
                                                 </ListItem>
@@ -144,9 +129,9 @@ const AboutUs: React.FC = () => {
                                         </List>
                                     </CardContent>
                                 </Card>
-                            </Grid>
+                            </Box>
                         ))}
-                    </Grid>
+                    </Box>
                 </Box>
 
                 {/* Features Section */}
@@ -154,9 +139,9 @@ const AboutUs: React.FC = () => {
                     <Typography variant="h4" gutterBottom sx={{ color: 'primary.main', mb: 4 }}>
                         Key Features
                     </Typography>
-                    <Grid container spacing={2}>
-                        {features.map((feature) => (
-                            <Grid item xs={12} sm={6} md={4} key={feature}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
+                        {features.map((feature, index) => (
+                            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '33.33%' } }} key={index}>
                                 <Paper
                                     sx={{
                                         p: 2,
@@ -175,9 +160,9 @@ const AboutUs: React.FC = () => {
                                     <CodeIcon sx={{ mr: 1, color: 'primary.main' }} />
                                     <Typography>{feature}</Typography>
                                 </Paper>
-                            </Grid>
+                            </Box>
                         ))}
-                    </Grid>
+                    </Box>
                 </Box>
 
                 {/* Contact Section */}
@@ -185,54 +170,26 @@ const AboutUs: React.FC = () => {
                     <Typography variant="h4" gutterBottom sx={{ color: 'primary.main' }}>
                         Get in Touch
                     </Typography>
-                    <Grid container spacing={3}>
-                        <Grid item xs={12} md={6}>
-                            <Typography variant="h6" gutterBottom>
-                                Project Repository
-                            </Typography>
-                            <Box display="flex" alignItems="center">
-                                <GitHubIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                <Typography
-                                    component="a"
-                                    href="https://github.com/RafayKhattak/HireSphere-SE25"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    sx={{
-                                        color: 'primary.main',
-                                        textDecoration: 'none',
-                                        '&:hover': { textDecoration: 'underline' }
-                                    }}
-                                >
-                                    https://github.com/RafayKhattak/HireSphere-SE25
-                                </Typography>
-                            </Box>
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                            <Typography variant="h6" gutterBottom>
-                                Communication
-                            </Typography>
-                            <List>
-                                <ListItem>
-                                    <ListItemIcon>
-                                        <ChatIcon color="primary" />
-                                    </ListItemIcon>
-                                    <ListItemText
-                                        primary="WhatsApp Group"
-                                        secondary="Primary communication channel for daily updates"
-                                    />
-                                </ListItem>
-                                <ListItem>
-                                    <ListItemIcon>
-                                        <SchoolIcon color="primary" />
-                                    </ListItemIcon>
-                                    <ListItemText
-                                        primary="Weekly Meetings"
-                                        secondary="Every Sunday at 10 AM (Google Meet)"
-                                    />
-                                </ListItem>
-                            </List>
-                        </Grid>
-                    </Grid>
+                    <List>
+                        <ListItem>
+                            <ListItemIcon>
+                                <ChatIcon color="primary" />
+                            </ListItemIcon>
+                            <ListItemText
+                                primary="WhatsApp Group"
+                                secondary="Primary communication channel for daily updates"
+                            />
+                        </ListItem>
+                        <ListItem>
+                            <ListItemIcon>
+                                <SchoolIcon color="primary" />
+                            </ListItemIcon>
+                            <ListItemText
+                                primary="Weekly Meetings"
+                                secondary="Every Sunday at 10 AM (Google Meet)"
+                            />
+                        </ListItem>
+                    </List>
                 </Paper>
             </Container>
         </Box>

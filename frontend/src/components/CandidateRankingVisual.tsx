@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { 
     Box, 
     Typography, 
     Paper,
     Button,
-    useTheme
+    useTheme,
+    Tooltip,
+    Chip,
+    ButtonGroup
 } from '@mui/material';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import InfoIcon from '@mui/icons-material/Info';
 import { saveAs } from 'file-saver';
 
 interface Candidate {
@@ -18,8 +22,8 @@ interface Candidate {
     };
     matchScore: number;
     strengths?: string[];
-    gaps?: string[];
-    explanation?: string;
+    weaknesses?: string[];
+    reasoning?: string;
     appliedAt: string;
     status: string;
 }
@@ -37,6 +41,19 @@ const CandidateRankingVisual: React.FC<CandidateRankingVisualProps> = ({
 }) => {
     const theme = useTheme();
 
+    useEffect(() => {
+        console.log(`[CandidateRanking] Rendering visual ranking for ${candidates.length} candidates`);
+        
+        // Log the top candidates
+        if (candidates.length > 0) {
+            const topCandidates = candidates.slice(0, 3);
+            console.log('[CandidateRanking] Top 3 candidates:');
+            topCandidates.forEach((c, i) => {
+                console.log(`[CandidateRanking] #${i+1}: ${c.candidate.name} (${c.matchScore}%)`);
+            });
+        }
+    }, [candidates]);
+
     // Sort candidates by match score
     const sortedCandidates = [...candidates].sort((a, b) => b.matchScore - a.matchScore);
     
@@ -51,19 +68,58 @@ const CandidateRankingVisual: React.FC<CandidateRankingVisualProps> = ({
         return theme.palette.error.main;
     };
     
+    // Function to get label for match score
+    const getMatchScoreLabel = (score: number) => {
+        if (score >= 80) return 'Excellent Match';
+        if (score >= 60) return 'Good Match';
+        if (score >= 40) return 'Fair Match';
+        return 'Poor Match';
+    }
+    
     // Define maximum bar width
     const maxBarWidth = 90; // percentage
     
+    // Calculate ranking statistics
+    const calculateStats = () => {
+        if (candidates.length === 0) return null;
+        
+        const scores = candidates.map(c => c.matchScore);
+        const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+        const medianScore = scores.sort((a, b) => a - b)[Math.floor(scores.length / 2)];
+        const highMatchCount = scores.filter(s => s >= 70).length;
+        const mediumMatchCount = scores.filter(s => s >= 50 && s < 70).length;
+        const lowMatchCount = scores.filter(s => s < 50).length;
+        
+        console.log(`[CandidateRanking] Calculated stats - Avg: ${avgScore.toFixed(1)}%, Median: ${medianScore}%`);
+        console.log(`[CandidateRanking] Matches by category - High: ${highMatchCount}, Medium: ${mediumMatchCount}, Low: ${lowMatchCount}`);
+        
+        return {
+            avgScore,
+            medianScore,
+            highMatchCount,
+            mediumMatchCount,
+            lowMatchCount,
+            totalCandidates: candidates.length
+        };
+    };
+    
+    const stats = calculateStats();
+    
     // Function to export data as CSV
     const exportToCSV = () => {
+        console.log(`[CandidateRanking] Exporting ${sortedCandidates.length} candidates to CSV`);
+        
         // Create CSV header
-        const header = ['Rank', 'Candidate Name', 'Match Score (%)', 'Status', 'Applied Date'];
+        const header = ['Rank', 'Candidate Name', 'Match Score (%)', 'Match Category', 'Strengths', 'Weaknesses', 'Status', 'Applied Date'];
         
         // Create rows
         const rows = sortedCandidates.map((candidate, index) => [
             (index + 1).toString(),
             candidate.candidate.name,
             candidate.matchScore.toString(),
+            getMatchScoreLabel(candidate.matchScore),
+            (candidate.strengths || []).join('; '),
+            (candidate.weaknesses || []).join('; '),
             candidate.status,
             new Date(candidate.appliedAt).toLocaleDateString()
         ]);
@@ -76,8 +132,13 @@ const CandidateRankingVisual: React.FC<CandidateRankingVisualProps> = ({
         
         // Create and download the file using file-saver
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-        saveAs(blob, `${jobTitle.replace(/\s+/g, '_')}_candidate_rankings.csv`);
+        const filename = `${jobTitle.replace(/\s+/g, '_')}_candidate_rankings_${new Date().toISOString().split('T')[0]}.csv`;
+        saveAs(blob, filename);
+        
+        console.log(`[CandidateRanking] CSV export complete: ${filename}`);
     };
+    
+    // Export to PDF function would go here if implemented
     
     return (
         <Paper sx={{ p: 3, mb: 3 }}>
@@ -85,14 +146,65 @@ const CandidateRankingVisual: React.FC<CandidateRankingVisualProps> = ({
                 <Typography variant="h6">
                     Candidate Ranking Visualization
                 </Typography>
-                <Button 
-                    size="small" 
-                    startIcon={<FileDownloadIcon />}
-                    onClick={exportToCSV}
-                >
-                    Export Rankings
-                </Button>
+                <ButtonGroup size="small">
+                    <Button 
+                        startIcon={<FileDownloadIcon />}
+                        onClick={exportToCSV}
+                        disabled={candidates.length === 0}
+                    >
+                        Export CSV
+                    </Button>
+                </ButtonGroup>
             </Box>
+            
+            {stats && (
+                <Box mb={4} p={2} bgcolor="background.default" borderRadius={1}>
+                    <Typography variant="subtitle2" gutterBottom>Ranking Statistics</Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', mx: -1 }}>
+                        <Box sx={{ width: { xs: '50%', md: '25%' }, px: 1 }}>
+                            <Box textAlign="center">
+                                <Typography variant="h4" color="primary">
+                                    {stats.avgScore.toFixed(1)}%
+                                </Typography>
+                                <Typography variant="caption">Average Match</Typography>
+                            </Box>
+                        </Box>
+                        <Box sx={{ width: { xs: '50%', md: '25%' }, px: 1 }}>
+                            <Box textAlign="center">
+                                <Typography variant="h4" color="secondary">
+                                    {stats.medianScore}%
+                                </Typography>
+                                <Typography variant="caption">Median Match</Typography>
+                            </Box>
+                        </Box>
+                        <Box sx={{ width: { xs: '100%', md: '50%' }, px: 1, mt: { xs: 2, md: 0 } }}>
+                            <Box display="flex" justifyContent="space-around">
+                                <Tooltip title="Candidates with 70%+ match score">
+                                    <Chip 
+                                        label={`${stats.highMatchCount} High`} 
+                                        size="small" 
+                                        color="success"
+                                    />
+                                </Tooltip>
+                                <Tooltip title="Candidates with 50-69% match score">
+                                    <Chip 
+                                        label={`${stats.mediumMatchCount} Medium`} 
+                                        size="small" 
+                                        color="primary"
+                                    />
+                                </Tooltip>
+                                <Tooltip title="Candidates with <50% match score">
+                                    <Chip 
+                                        label={`${stats.lowMatchCount} Low`} 
+                                        size="small" 
+                                        color="error"
+                                    />
+                                </Tooltip>
+                            </Box>
+                        </Box>
+                    </Box>
+                </Box>
+            )}
             
             <Box sx={{ 
                 height: topCandidates.length > 5 ? 400 : topCandidates.length * 70,
@@ -108,11 +220,16 @@ const CandidateRankingVisual: React.FC<CandidateRankingVisualProps> = ({
                             alignItems: 'center',
                             mb: 1.5,
                             cursor: 'pointer',
+                            p: 1,
+                            borderRadius: 1,
                             '&:hover': {
-                                opacity: 0.9
+                                bgcolor: 'action.hover',
                             }
                         }}
-                        onClick={() => onSelectCandidate(candidate.applicationId)}
+                        onClick={() => {
+                            console.log(`[CandidateRanking] Candidate selected: ${candidate.candidate.name} (${candidate.matchScore}%)`);
+                            onSelectCandidate(candidate.applicationId);
+                        }}
                     >
                         <Typography 
                             variant="body1" 
@@ -165,6 +282,33 @@ const CandidateRankingVisual: React.FC<CandidateRankingVisualProps> = ({
                                 </Typography>
                             </Box>
                         </Box>
+                        
+                        <Tooltip 
+                            title={
+                                <Box>
+                                    <Typography variant="caption" fontWeight="bold">Key Strengths:</Typography>
+                                    <ul style={{ margin: '4px 0', paddingLeft: 20 }}>
+                                        {(candidate.strengths || []).slice(0, 3).map((strength, i) => (
+                                            <li key={i}><Typography variant="caption">{strength}</Typography></li>
+                                        ))}
+                                    </ul>
+                                    {candidate.reasoning && (
+                                        <>
+                                            <Typography variant="caption" fontWeight="bold">Reasoning:</Typography>
+                                            <Typography variant="caption" display="block">{candidate.reasoning}</Typography>
+                                        </>
+                                    )}
+                                </Box>
+                            }
+                            arrow
+                            placement="left"
+                        >
+                            <InfoIcon 
+                                fontSize="small" 
+                                color="action" 
+                                sx={{ ml: 1, cursor: 'help' }}
+                            />
+                        </Tooltip>
                     </Box>
                 ))}
                 
@@ -177,7 +321,7 @@ const CandidateRankingVisual: React.FC<CandidateRankingVisualProps> = ({
             
             {candidates.length > 10 && (
                 <Typography variant="caption" sx={{ display: 'block', textAlign: 'right', mt: 1 }}>
-                    Showing top 10 of {candidates.length} candidates
+                    Showing top 10 of {candidates.length} candidates. Click Export for full list.
                 </Typography>
             )}
         </Paper>

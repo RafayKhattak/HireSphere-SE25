@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { employerService } from '../services/api';
 import {
@@ -8,7 +8,6 @@ import {
   Box,
   TextField,
   Button,
-  Grid,
   CircularProgress,
   Alert,
   Card,
@@ -31,7 +30,8 @@ import {
   Avatar,
   Rating,
   Tooltip,
-  IconButton
+  IconButton,
+  Checkbox
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import PersonIcon from '@mui/icons-material/Person';
@@ -44,6 +44,7 @@ import MessageIcon from '@mui/icons-material/Message';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { useNavigate } from 'react-router-dom';
 
 interface CandidateSearchParams {
   skills: string;
@@ -93,6 +94,7 @@ const CandidateSearch: React.FC = () => {
   const [isAIEnhanced, setIsAIEnhanced] = useState<boolean>(false);
   const [searchPerformed, setSearchPerformed] = useState<boolean>(false);
   const [savedCandidates, setSavedCandidates] = useState<string[]>([]);
+  const [pagination, setPagination] = useState({ totalPages: 1, currentPage: 1, totalCandidates: 0 });
 
   // Check if user is authorized (must be an employer)
   useEffect(() => {
@@ -115,16 +117,29 @@ const CandidateSearch: React.FC = () => {
       setError(null);
       setSearchPerformed(true);
       
-      const response = await employerService.searchCandidates({
-        skills: searchParams.skills,
-        experience: searchParams.experience ? parseInt(searchParams.experience) : undefined,
-        location: searchParams.location,
-        useAI: searchParams.useAI
-      });
+      // Ensure experience is a number or undefined before passing
+      const numericExperience = searchParams.experience === 'any' || searchParams.experience === '' ? undefined : Number(searchParams.experience);
       
-      setCandidates(response.candidates);
-      setTotalCandidates(response.totalCount);
-      setIsAIEnhanced(response.aiEnhanced);
+      const searchParamsToSend = {
+        skills: searchParams.skills || undefined,
+        experience: numericExperience,
+        location: searchParams.location || undefined,
+        useAI: searchParams.useAI
+      };
+      
+      // Remove undefined properties explicitly to match expected type
+      const cleanParams: { skills?: string; experience?: number; location?: string; useAI?: boolean } = {};
+      if (searchParamsToSend.skills) cleanParams.skills = searchParamsToSend.skills;
+      if (searchParamsToSend.experience !== undefined) cleanParams.experience = searchParamsToSend.experience;
+      if (searchParamsToSend.location) cleanParams.location = searchParamsToSend.location;
+      if (searchParamsToSend.useAI !== undefined) cleanParams.useAI = searchParamsToSend.useAI;
+
+      const response = await employerService.searchCandidates(cleanParams);
+      
+      setCandidates(response.candidates || []);
+      setTotalCandidates(response.totalCount || 0);
+      setIsAIEnhanced(response.aiEnhanced || false);
+      setPagination(response.pagination || { totalPages: 1, currentPage: 1, totalCandidates: 0 });
       
     } catch (err: any) {
       console.error('Error searching for candidates:', err);
@@ -242,8 +257,8 @@ const CandidateSearch: React.FC = () => {
         
         {/* Search form */}
         <form onSubmit={handleSearch}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={4}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: 'calc(100% / 3 + 1px)' } }}>
               <TextField
                 fullWidth
                 label="Skills"
@@ -254,9 +269,9 @@ const CandidateSearch: React.FC = () => {
                 placeholder="e.g. JavaScript, React, Node.js"
                 helperText="Separate multiple skills with commas"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={2}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: 'calc(100% / 6 + 1px)' } }}>
               <FormControl fullWidth variant="outlined">
                 <InputLabel id="experience-label">Experience</InputLabel>
                 <Select
@@ -275,9 +290,9 @@ const CandidateSearch: React.FC = () => {
                   <MenuItem value="10">10+ Years</MenuItem>
                 </Select>
               </FormControl>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={4}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: 'calc(100% / 3 + 1px)' } }}>
               <TextField
                 fullWidth
                 label="Location"
@@ -287,32 +302,30 @@ const CandidateSearch: React.FC = () => {
                 onChange={handleInputChange}
                 placeholder="e.g. New York, Remote"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={2}>
-              <Box height="100%" display="flex" alignItems="center">
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={searchParams.useAI}
-                      onChange={handleToggleChange}
-                      name="useAI"
-                      color="primary"
-                    />
-                  }
-                  label={
-                    <Box display="flex" alignItems="center">
-                      <span>AI Ranking</span>
-                      <Tooltip title="Use AI to rank candidates based on their fit for your job openings">
-                        <AutoAwesomeIcon fontSize="small" color="primary" sx={{ ml: 0.5 }} />
-                      </Tooltip>
-                    </Box>
-                  }
-                />
-              </Box>
-            </Grid>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: 'calc(100% / 6 + 1px)' }, display: 'flex', alignItems: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={searchParams.useAI}
+                    onChange={handleToggleChange}
+                    name="useAI"
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box display="flex" alignItems="center">
+                    <span>AI Ranking</span>
+                    <Tooltip title="Use AI to rank candidates based on their fit for your job openings">
+                      <AutoAwesomeIcon fontSize="small" color="primary" sx={{ ml: 0.5 }} />
+                    </Tooltip>
+                  </Box>
+                }
+              />
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <Button
                 type="submit"
                 variant="contained"
@@ -323,8 +336,8 @@ const CandidateSearch: React.FC = () => {
               >
                 {loading ? 'Searching...' : 'Search Candidates'}
               </Button>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </form>
         
         {/* Results section */}
@@ -352,9 +365,9 @@ const CandidateSearch: React.FC = () => {
                 No candidates match your search criteria. Try broadening your search.
               </Alert>
             ) : (
-              <Grid container spacing={3}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
                 {candidates.map((candidate) => (
-                  <Grid item xs={12} md={6} lg={4} key={candidate._id}>
+                  <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%', lg: 'calc(100% / 3)' } }} key={candidate._id}>
                     <Card elevation={2} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                       <Box sx={{ p: 2, display: 'flex', alignItems: 'center' }}>
                         <Avatar
@@ -518,9 +531,9 @@ const CandidateSearch: React.FC = () => {
                         </IconButton>
                       </CardActions>
                     </Card>
-                  </Grid>
+                  </Box>
                 ))}
-              </Grid>
+              </Box>
             )}
           </Box>
         )}

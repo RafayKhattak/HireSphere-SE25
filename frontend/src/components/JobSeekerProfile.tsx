@@ -9,7 +9,6 @@ import {
   Box,
   TextField,
   Button,
-  Grid,
   CircularProgress,
   Alert,
   Divider,
@@ -35,7 +34,13 @@ import {
   FormHelperText,
   Radio,
   Tooltip,
-  Badge
+  Badge,
+  Checkbox,
+  CheckboxProps,
+  Tabs,
+  Tab,
+  useTheme,
+  Theme
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
@@ -65,8 +70,10 @@ interface JobSeekerProfileData {
     degree: string;
     institution: string;
     graduationYear: number;
+    fieldOfStudy?: string;
   }[];
   experience?: {
+    _id?: string;
     position: string;
     company: string;
     startDate: string;
@@ -75,6 +82,14 @@ interface JobSeekerProfileData {
     description?: string;
   }[];
   resume?: string;
+  totalYearsExperience?: number;
+}
+
+// Add assessment interface for proper typing
+interface Assessment {
+  status: string;
+  score: number;
+  skill: string;
 }
 
 const JobSeekerProfile: React.FC = () => {
@@ -91,14 +106,48 @@ const JobSeekerProfile: React.FC = () => {
   const [newSkill, setNewSkill] = useState<string>('');
   const [verifiedSkills, setVerifiedSkills] = useState<string[]>([]);
 
+  // Add state for experience and education dialogs
+  const [experienceDialogOpen, setExperienceDialogOpen] = useState<boolean>(false);
+  const [educationDialogOpen, setEducationDialogOpen] = useState<boolean>(false);
+  const [currentExperienceIndex, setCurrentExperienceIndex] = useState<number | null>(null);
+  const [currentEducationIndex, setCurrentEducationIndex] = useState<number | null>(null);
+  const [currentExperience, setCurrentExperience] = useState<{
+    _id?: string;
+    position: string;
+    company: string;
+    startDate: string;
+    endDate?: string;
+    current: boolean;
+    description?: string;
+  }>({
+    position: '',
+    company: '',
+    startDate: '',
+    endDate: '',
+    current: false,
+    description: ''
+  });
+  const [currentEducation, setCurrentEducation] = useState<{
+    degree: string;
+    institution: string;
+    graduationYear: number;
+    fieldOfStudy?: string;
+  }>({
+    degree: '',
+    institution: '',
+    graduationYear: new Date().getFullYear(),
+    fieldOfStudy: ''
+  });
+
   // Add new state variables for resume
   const [resumeUploading, setResumeUploading] = useState<boolean>(false);
   const [parsedData, setParsedData] = useState<any>(null);
   const [showParsePreview, setShowParsePreview] = useState<boolean>(false);
 
   // Add state for Gemini API usage
-  const [useGeminiAPI, setUseGeminiAPI] = useState<boolean>(true);
   const [parsingMode, setParsingMode] = useState<string>('auto');
+
+  const theme = useTheme();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -131,14 +180,15 @@ const JobSeekerProfile: React.FC = () => {
   useEffect(() => {
     const fetchVerifiedSkills = async () => {
       try {
-        const assessments = await assessmentService.getMyAssessments();
+        const assessments = await assessmentService.getMyAssessments() as Assessment[];
         // Extract skills from passed assessments (score >= 70)
         const verifiedSkillsFromAssessments = assessments
-          .filter(assessment => assessment.status === 'evaluated' && assessment.score >= 70)
-          .map(assessment => assessment.skill);
+          .filter((assessment: Assessment) => assessment.status === 'evaluated' && assessment.score >= 70)
+          .map((assessment: Assessment) => assessment.skill);
         
         // Remove duplicates and set state
-        setVerifiedSkills([...new Set(verifiedSkillsFromAssessments)]);
+        const uniqueSkills = new Set<string>(verifiedSkillsFromAssessments);
+        setVerifiedSkills(Array.from(uniqueSkills));
       } catch (err) {
         console.error('Error fetching verified skills:', err);
       }
@@ -232,10 +282,14 @@ const JobSeekerProfile: React.FC = () => {
               console.log('Image uploaded successfully');
               debugDiv.innerHTML += '<p style="color:green">Image uploaded successfully!</p>';
               
-              setProfileData(prevData => ({
-                ...prevData,
-                profileImage: base64Image
-              }));
+              setProfileData(prevData => {
+                if (!prevData) return null;
+                return {
+                  ...prevData,
+                  profileImage: base64Image
+                };
+              });
+              
               if (updateUserContext && user) {
                 updateUserContext({
                   ...user,
@@ -329,13 +383,16 @@ const JobSeekerProfile: React.FC = () => {
       const result = await userService.uploadResume(file, useGemini);
       
       // Update the profile with parsed data
-      setProfileData(prevData => ({
-        ...prevData,
-        ...result.user,
-        skills: result.user.skills || prevData.skills,
-        education: result.user.education || prevData.education,
-        experience: result.user.experience || prevData.experience
-      }));
+      setProfileData(prevData => {
+        if (!prevData) return null;
+        return {
+          ...prevData,
+          ...result.user,
+          skills: result.user.skills || prevData.skills,
+          education: result.user.education || prevData.education,
+          experience: result.user.experience || prevData.experience
+        };
+      });
       
       // Store the parsed data for preview
       setParsedData(result.parsed);
@@ -366,9 +423,193 @@ const JobSeekerProfile: React.FC = () => {
     setShowParsePreview(false);
   };
 
+  // Utility to format date string (from ISO or other formats) to MM/YYYY
+  const formatToMonthYear = (dateString: string | Date | undefined): string => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return ''; // Invalid date
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+      return `${month}/${year}`;
+    } catch (e) {
+      return ''; // Return empty if any error
+    }
+  };
+
+  // Utility to convert MM/YYYY string to a date object (start of month)
+  const parseMonthYear = (monthYear: string | undefined): Date | null => {
+    if (!monthYear || !/^(0[1-9]|1[0-2])\/\d{4}$/.test(monthYear)) {
+      return null; // Invalid format
+    }
+    try {
+      const [month, year] = monthYear.split('/').map(Number);
+      // Return date object for the 1st day of the month
+      return new Date(year, month - 1, 1); // Use local timezone constructor
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Experience handlers
+  const handleAddExperience = () => {
+    setCurrentExperience({
+      position: '',
+      company: '',
+      startDate: '',
+      endDate: '',
+      current: false,
+      description: ''
+    });
+    setCurrentExperienceIndex(null);
+    setExperienceDialogOpen(true);
+  };
+
+  const handleEditExperience = (index: number) => {
+    if (profileData?.experience && profileData.experience[index]) {
+      const expToEdit = profileData.experience[index];
+      console.log("[JobSeekerProfile] Editing experience:", expToEdit); // Log item being edited
+      setCurrentExperience({
+        _id: expToEdit._id, // Make sure to copy the _id
+        position: expToEdit.position,
+        company: expToEdit.company,
+        description: expToEdit.description,
+        current: expToEdit.current,
+        // Format dates for display
+        startDate: formatToMonthYear(expToEdit.startDate),
+        endDate: formatToMonthYear(expToEdit.endDate)
+      });
+      setCurrentExperienceIndex(index); // Keep index for mapping fallback
+      setExperienceDialogOpen(true);
+    }
+  };
+
+  const handleDeleteExperience = (index: number) => {
+    if (profileData?.experience) {
+      setProfileData(prev => {
+        if (!prev) return null;
+        const newExperience = [...prev.experience!];
+        newExperience.splice(index, 1);
+        return {
+          ...prev,
+          experience: newExperience
+        };
+      });
+    }
+  };
+
+  const handleSaveExperience = () => {
+    // Validate required fields
+    if (!currentExperience.position || !currentExperience.company || !currentExperience.startDate) {
+      setError('Position, company and start date (MM/YYYY) are required for experience');
+      return;
+    }
+    
+    // Validate date formats before saving
+    const parsedStartDate = parseMonthYear(currentExperience.startDate);
+    const parsedEndDate = currentExperience.current ? null : parseMonthYear(currentExperience.endDate);
+
+    if (!parsedStartDate) {
+        setError('Invalid Start Date format. Please use MM/YYYY.');
+        return;
+    }
+    if (!currentExperience.current && currentExperience.endDate && !parsedEndDate) {
+        setError('Invalid End Date format. Please use MM/YYYY.');
+        return;
+    }
+    // Optional: Check if end date is before start date
+    if (!currentExperience.current && parsedEndDate && parsedStartDate && parsedEndDate < parsedStartDate) {
+      setError('End Date cannot be before Start Date.');
+      return;
+    }
+
+    // Prepare the object with validated/formatted data, but DON'T update main state yet
+    const experienceToSave = {
+        ...currentExperience, // Includes _id if editing
+        startDate: parsedStartDate.toISOString().split('T')[0], 
+        endDate: currentExperience.current ? undefined : (parsedEndDate ? parsedEndDate.toISOString().split('T')[0] : undefined)
+    };
+    
+    // Store the validated/formatted data back into currentExperience state
+    // This assumes setCurrentExperience can handle the object with _id
+    setCurrentExperience(experienceToSave); 
+
+    console.log('[JobSeekerProfile] Validated/formatted experience ready in currentExperience state:', experienceToSave);
+
+    setError(null); // Clear error on successful save prep
+    setExperienceDialogOpen(false); // Close the dialog
+  };
+
+  // Education handlers
+  const handleAddEducation = () => {
+    setCurrentEducation({
+      degree: '',
+      institution: '',
+      graduationYear: new Date().getFullYear(),
+      fieldOfStudy: ''
+    });
+    setCurrentEducationIndex(null);
+    setEducationDialogOpen(true);
+  };
+
+  const handleEditEducation = (index: number) => {
+    if (profileData?.education && profileData.education[index]) {
+      setCurrentEducation({
+        ...profileData.education[index],
+        fieldOfStudy: profileData.education[index].fieldOfStudy || ''
+      });
+      setCurrentEducationIndex(index);
+      setEducationDialogOpen(true);
+    }
+  };
+
+  const handleDeleteEducation = (index: number) => {
+    if (profileData?.education) {
+      setProfileData(prev => {
+        if (!prev) return null;
+        const newEducation = [...prev.education!];
+        newEducation.splice(index, 1);
+        return {
+          ...prev,
+          education: newEducation
+        };
+      });
+    }
+  };
+
+  const handleSaveEducation = () => {
+    if (!currentEducation.degree || !currentEducation.institution) {
+      setError('Degree and institution are required for education');
+      return;
+    }
+
+    setProfileData(prev => {
+      if (!prev) return null;
+      const newEducation = [...(prev.education || [])];
+      
+      if (currentEducationIndex !== null) {
+        // Edit existing education
+        newEducation[currentEducationIndex] = currentEducation;
+      } else {
+        // Add new education
+        newEducation.push(currentEducation);
+      }
+      
+      return {
+        ...prev,
+        education: newEducation
+      };
+    });
+    
+    setEducationDialogOpen(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Log the state as soon as handleSubmit is called
+    console.log('[JobSeekerProfile] handleSubmit called. Current profileData state:', profileData);
+
     if (!profileData?.firstName || !profileData?.lastName) {
       setError('First name and last name are required');
       return;
@@ -379,6 +620,17 @@ const JobSeekerProfile: React.FC = () => {
       setError(null);
       setSuccess(null);
 
+      // --- Merge pending dialog changes before creating payload --- 
+      let finalExperienceArray = profileData.experience || [];
+      if (currentExperienceIndex !== null && currentExperience) { // Check if an edit was pending
+         console.log(`[JobSeekerProfile] Merging pending experience edit at index ${currentExperienceIndex}`);
+         finalExperienceArray = finalExperienceArray.map((exp, index) => 
+             index === currentExperienceIndex ? currentExperience : exp
+         );
+      }
+      // NOTE: Add similar logic here for education if needed (currentEducationIndex)
+      // --- End merge --- 
+
       const skillsArray = profileData.skills ? profileData.skills.map(skill => skill.trim()) : [];
 
       const profileUpdateData = {
@@ -388,24 +640,46 @@ const JobSeekerProfile: React.FC = () => {
         location: profileData.location,
         title: profileData.title,
         skills: skillsArray,
-        profileImage: profileData.profileImage
+        totalYearsExperience: profileData.totalYearsExperience,
+        profileImage: profileData.profileImage,
+        education: profileData.education, // Assuming education dialog updates state directly or needs similar merge
+        experience: finalExperienceArray // Use the potentially merged array
       };
 
+      // Log the data being sent
+      console.log('[JobSeekerProfile] Sending update data:', profileUpdateData);
+
       const response = await api.put('/jobseeker/profile', profileUpdateData);
-      setProfileData(response.data);
       
-      if (updateUserContext && user) {
-        updateUserContext({
-          ...user,
-          firstName: profileData.firstName,
-          lastName: profileData.lastName,
-          phone: profileData.phone,
-          location: profileData.location,
-          profileImage: profileData.profileImage
-        });
+      // Log the response from the backend
+      console.log('[JobSeekerProfile] Received response data:', response.data);
+
+      const updatedProfile = response.data as JobSeekerProfileData;
+      // Log the specific profile data received to check experience
+      console.log('[JobSeekerProfile] Profile data set after update:', updatedProfile);
+      setProfileData(updatedProfile); 
+      
+      // Reset pending edit state after successful save
+      setCurrentExperienceIndex(null); 
+      // setCurrentEducationIndex(null); // Add if handling education similarly
+
+      // Update only the fields that exist in the AuthContext User type
+      if (user && updatedProfile) {
+          updateUserContext({ 
+              ...user, // Spread existing context user
+              _id: user._id, 
+              id: user.id, // Include id if it exists in your context type
+              email: user.email, 
+              type: user.type, 
+              name: `${updatedProfile.firstName} ${updatedProfile.lastName}`, // Update name
+              firstName: updatedProfile.firstName, // Update firstName if needed by context
+              lastName: updatedProfile.lastName, // Update lastName if needed by context
+              profileImage: updatedProfile.profileImage, // Update profileImage if needed by context
+              // Ensure NO fields like totalYearsExperience, skills, title, etc., are added here
+              // unless they are EXPLICITLY defined in the User type in src/types/index.ts
+          });
       }
-      
-      setSuccess('Profile updated successfully');
+      setSuccess('Profile updated successfully!');
     } catch (err: any) {
       console.error('Error updating profile:', err);
       setError(err.response?.data?.message || 'Failed to update profile');
@@ -577,31 +851,31 @@ const JobSeekerProfile: React.FC = () => {
         </Box>
 
         {/* Rest of your profile form here */}
-        <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
+        <form onSubmit={handleSubmit} id="jobseeker-profile-form">
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 fullWidth
                 label="First Name"
                 variant="outlined"
                 value={profileData?.firstName}
-                onChange={(e) => setProfileData(prev => ({ ...prev, firstName: e.target.value }))}
+                onChange={(e) => setProfileData(prev => prev ? { ...prev, firstName: e.target.value } : null)}
                 required
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 fullWidth
                 label="Last Name"
                 variant="outlined"
                 value={profileData?.lastName}
-                onChange={(e) => setProfileData(prev => ({ ...prev, lastName: e.target.value }))}
+                onChange={(e) => setProfileData(prev => prev ? { ...prev, lastName: e.target.value } : null)}
                 required
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <TextField
                 fullWidth
                 label="Email"
@@ -610,53 +884,77 @@ const JobSeekerProfile: React.FC = () => {
                 disabled
                 helperText="Email cannot be changed"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 fullWidth
                 label="Phone"
                 variant="outlined"
                 value={profileData?.phone}
-                onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
+                onChange={(e) => setProfileData(prev => prev ? { ...prev, phone: e.target.value } : null)}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 fullWidth
                 label="Location"
                 variant="outlined"
                 value={profileData?.location}
-                onChange={(e) => setProfileData(prev => ({ ...prev, location: e.target.value }))}
+                onChange={(e) => setProfileData(prev => prev ? { ...prev, location: e.target.value } : null)}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <TextField
                 fullWidth
                 label="Professional Title"
                 variant="outlined"
                 value={profileData?.title}
-                onChange={(e) => setProfileData(prev => ({ ...prev, title: e.target.value }))}
+                onChange={(e) => setProfileData(prev => prev ? { ...prev, title: e.target.value } : null)}
                 placeholder="e.g. Senior Software Engineer"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <TextField
                 fullWidth
                 label="Skills"
                 variant="outlined"
                 value={profileData?.skills ? profileData.skills.join(', ') : ''}
-                onChange={(e) => setProfileData(prev => ({ ...prev, skills: e.target.value.split(',').map(skill => skill.trim()) }))}
+                onChange={(e) => setProfileData(prev => prev ? { ...prev, skills: e.target.value.split(',').map(skill => skill.trim()) } : null)}
                 placeholder="e.g. JavaScript, React, Node.js"
                 helperText="Separate skills with commas"
                 multiline
                 rows={2}
               />
-            </Grid>
-          </Grid>
+            </Box>
+            
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
+              <TextField
+                fullWidth
+                label="Total Years of Experience"
+                type="number"
+                value={profileData?.totalYearsExperience ?? ''} // Use optional chaining and nullish coalescing
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (profileData) { // Check profileData is not null
+                      setProfileData({
+                        ...profileData,
+                        // Set to undefined if empty, otherwise parse valid non-negative integer
+                        totalYearsExperience: value === '' ? undefined : (
+                          !isNaN(parseInt(value, 10)) && parseInt(value, 10) >= 0 
+                            ? parseInt(value, 10) 
+                            : profileData.totalYearsExperience // Keep previous value if invalid input
+                        )
+                      });
+                  }
+                }}
+                margin="normal"
+              />
+            </Box>
+          </Box>
           
           <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end' }}>
             <Button
@@ -708,9 +1006,17 @@ const JobSeekerProfile: React.FC = () => {
                     <Chip
                       label={skill}
                       onDelete={() => {
-                        const updatedSkills = [...(profileData.skills || [])];
-                        updatedSkills.splice(index, 1);
-                        setProfileData(prev => prev ? {...prev, skills: updatedSkills} : null);
+                        if (profileData?.skills) {
+                          const updatedSkills = [...profileData.skills];
+                          updatedSkills.splice(index, 1);
+                          setProfileData(prev => {
+                            if (!prev) return null;
+                            return {
+                              ...prev,
+                              skills: updatedSkills
+                            };
+                          });
+                        }
                       }}
                       sx={{ 
                         mb: 1,
@@ -736,7 +1042,7 @@ const JobSeekerProfile: React.FC = () => {
             <Button
               variant="contained"
               onClick={() => {
-                if (newSkill.trim() !== '') {
+                if (newSkill.trim() !== '' && profileData) {
                   setProfileData(prev => {
                     if (!prev) return null;
                     return {
@@ -769,7 +1075,7 @@ const JobSeekerProfile: React.FC = () => {
                   <Typography variant="subtitle1">{exp.position}</Typography>
                   <Typography variant="body2">{exp.company}</Typography>
                   <Typography variant="body2" color="textSecondary">
-                    {exp.startDate} - {exp.current ? 'Present' : exp.endDate}
+                    {formatToMonthYear(exp.startDate)} - {exp.current ? 'Present' : formatToMonthYear(exp.endDate)}
                   </Typography>
                   <Typography variant="body2" mt={1}>
                     {exp.description}
@@ -847,8 +1153,9 @@ const JobSeekerProfile: React.FC = () => {
             variant="contained"
             size="large"
             startIcon={<SaveIcon />}
-            onClick={handleSubmit}
+            type="submit"
             disabled={saveLoading}
+            form="jobseeker-profile-form"
           >
             {saveLoading ? 'Saving...' : 'Save Profile'}
           </Button>
@@ -958,8 +1265,143 @@ const JobSeekerProfile: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Experience Dialog */}
+      <Dialog open={experienceDialogOpen} onClose={() => setExperienceDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{currentExperienceIndex !== null ? 'Edit Experience' : 'Add Experience'}</DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: (theme: Theme) => theme.spacing(-1) }}>
+            <Box sx={{ padding: (theme: Theme) => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
+              <TextField
+                fullWidth
+                label="Position"
+                required
+                value={currentExperience.position}
+                onChange={(e) => setCurrentExperience(prev => ({ ...prev, position: e.target.value }))}
+                margin="normal"
+              />
+            </Box>
+            <Box sx={{ padding: (theme: Theme) => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
+              <TextField
+                fullWidth
+                label="Company"
+                required
+                value={currentExperience.company}
+                onChange={(e) => setCurrentExperience(prev => ({ ...prev, company: e.target.value }))}
+                margin="normal"
+              />
+            </Box>
+            <Box sx={{ padding: (theme: Theme) => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
+              <TextField
+                fullWidth
+                label="Start Date"
+                required
+                value={currentExperience.startDate}
+                onChange={(e) => setCurrentExperience(prev => ({ ...prev, startDate: e.target.value }))}
+                margin="normal"
+                placeholder="MM/YYYY"
+              />
+            </Box>
+            <Box sx={{ padding: (theme: Theme) => theme.spacing(1), width: { xs: '100%', md: '50%' }, display: 'flex', alignItems: 'center' }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={currentExperience.current}
+                    onChange={(e) => setCurrentExperience(prev => ({ ...prev, current: e.target.checked }))}
+                  />
+                }
+                label="Currently working here"
+              />
+            </Box>
+            {!currentExperience.current && (
+              <Box sx={{ padding: (theme: Theme) => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
+                <TextField
+                  fullWidth
+                  label="End Date"
+                  value={currentExperience.endDate || ''}
+                  onChange={(e) => setCurrentExperience(prev => ({ ...prev, endDate: e.target.value }))}
+                  margin="normal"
+                  placeholder="MM/YYYY"
+                />
+              </Box>
+            )}
+            <Box sx={{ padding: (theme: Theme) => theme.spacing(1), width: '100%' }}>
+              <TextField
+                fullWidth
+                label="Description"
+                multiline
+                rows={4}
+                value={currentExperience.description || ''}
+                onChange={(e) => setCurrentExperience(prev => ({ ...prev, description: e.target.value }))}
+                margin="normal"
+              />
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExperienceDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSaveExperience} variant="contained" color="primary">
+            Save Experience
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Education Dialog */}
+      <Dialog open={educationDialogOpen} onClose={() => setEducationDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{currentEducationIndex !== null ? 'Edit Education' : 'Add Education'}</DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: (theme: Theme) => theme.spacing(-1) }}>
+            <Box sx={{ padding: (theme: Theme) => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
+              <TextField
+                fullWidth
+                label="Degree"
+                required
+                value={currentEducation.degree}
+                onChange={(e) => setCurrentEducation(prev => ({ ...prev, degree: e.target.value }))}
+                margin="normal"
+              />
+            </Box>
+            <Box sx={{ padding: (theme: Theme) => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
+              <TextField
+                fullWidth
+                label="Institution"
+                required
+                value={currentEducation.institution}
+                onChange={(e) => setCurrentEducation(prev => ({ ...prev, institution: e.target.value }))}
+                margin="normal"
+              />
+            </Box>
+            <Box sx={{ padding: (theme: Theme) => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
+              <TextField
+                fullWidth
+                label="Graduation Year"
+                type="number"
+                required
+                value={currentEducation.graduationYear}
+                onChange={(e) => setCurrentEducation(prev => ({ ...prev, graduationYear: parseInt(e.target.value) }))}
+                margin="normal"
+              />
+            </Box>
+            <Box sx={{ padding: (theme: Theme) => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
+              <TextField
+                fullWidth
+                label="Field of Study"
+                value={currentEducation.fieldOfStudy || ''}
+                onChange={(e) => setCurrentEducation(prev => ({ ...prev, fieldOfStudy: e.target.value }))}
+                margin="normal"
+              />
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEducationDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSaveEducation} variant="contained" color="primary">
+            Save Education
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
 
-export default JobSeekerProfile; 
+export default JobSeekerProfile;

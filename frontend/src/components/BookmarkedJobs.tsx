@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
     Box,
     Container,
@@ -15,8 +15,10 @@ import {
     Button
 } from '@mui/material';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
-import { bookmarkService } from '../services/api';
+import BookmarkRemoveIcon from '@mui/icons-material/BookmarkRemove';
 import { useAuth } from '../context/AuthContext';
+import { bookmarkService } from '../services/api';
+import { formatDistanceToNow } from 'date-fns';
 
 interface Job {
     _id: string;
@@ -38,7 +40,7 @@ const BookmarkedJobs: React.FC = () => {
     const { user } = useAuth();
     const [jobs, setJobs] = useState<Job[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+    const [error, setError] = useState<string | null>(null);
     const [snackbar, setSnackbar] = useState<{
         open: boolean;
         message: string;
@@ -50,19 +52,27 @@ const BookmarkedJobs: React.FC = () => {
     });
 
     useEffect(() => {
-        fetchBookmarkedJobs();
-    }, []);
-
-    const fetchBookmarkedJobs = async () => {
-        try {
-            const data = await bookmarkService.getBookmarks();
-            setJobs(data);
-            setLoading(false);
-        } catch (err) {
-            setError('Failed to fetch bookmarked jobs');
-            setLoading(false);
+        if (!user) {
+            navigate('/login');
+            return;
         }
-    };
+
+        const fetchBookmarkedJobs = async () => {
+            try {
+                setLoading(true);
+                const data = await bookmarkService.getBookmarks();
+                setJobs(data);
+                setError(null);
+            } catch (err: any) {
+                console.error('Error fetching bookmarked jobs:', err);
+                setError(err.response?.data?.message || 'Failed to load bookmarked jobs');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchBookmarkedJobs();
+    }, [user, navigate]);
 
     const formatSalary = (min: number | undefined, max: number | undefined, currency: string | undefined) => {
         if (!min || !max || !currency) return 'Salary not specified';
@@ -81,7 +91,9 @@ const BookmarkedJobs: React.FC = () => {
                 message: 'Job removed from bookmarks',
                 severity: 'success'
             });
-        } catch (err) {
+        } catch (err: any) {
+            console.error('Error removing bookmark:', err);
+            setError(err.response?.data?.message || 'Failed to remove bookmark');
             setSnackbar({
                 open: true,
                 message: 'Failed to remove bookmark',
@@ -123,7 +135,7 @@ const BookmarkedJobs: React.FC = () => {
             ) : (
                 <Grid container spacing={3}>
                     {jobs.map((job) => (
-                        <Grid item xs={12} key={job._id}>
+                        <Grid component="div" sx={{ gridColumn: 'span 12' }} key={job._id}>
                             <Card>
                                 <CardContent>
                                     <Box display="flex" justifyContent="space-between" alignItems="flex-start">

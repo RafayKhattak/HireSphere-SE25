@@ -10,7 +10,8 @@ import {
     Chip,
     CircularProgress,
     Alert,
-    Divider
+    Divider,
+    Link
 } from '@mui/material';
 import { applicationService } from '../services/api';
 import { JobApplication } from '../types';
@@ -90,13 +91,13 @@ const MyApplications: React.FC = () => {
                 My Applications
             </Typography>
 
-            <Grid container spacing={3}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
                 {applications.map((application) => {
                     const job = typeof application.job === 'object' ? application.job : null;
                     if (!job) return null;
 
                     return (
-                        <Grid item xs={12} key={application._id}>
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }} key={application._id}>
                             <Card>
                                 <CardContent>
                                     <Box display="flex" justifyContent="space-between" alignItems="flex-start">
@@ -122,19 +123,27 @@ const MyApplications: React.FC = () => {
 
                                     <Divider sx={{ my: 2 }} />
 
-                                    <Typography variant="subtitle1" gutterBottom>
-                                        Cover Letter
-                                    </Typography>
-                                    <Typography variant="body2" paragraph>
-                                        {application.coverLetter}
-                                    </Typography>
+                                    {application.coverLetter && (
+                                        <Box mb={2}>
+                                            <Typography variant="subtitle1" gutterBottom>
+                                                Cover Letter
+                                            </Typography>
+                                            <Typography variant="body2" paragraph sx={{ whiteSpace: 'pre-wrap', maxHeight: '100px', overflow: 'auto' }}> 
+                                                {application.coverLetter}
+                                            </Typography>
+                                        </Box>
+                                    )}
 
-                                    <Typography variant="subtitle1" gutterBottom>
-                                        Resume
-                                    </Typography>
-                                    <Typography variant="body2" component="a" href={application.resume} target="_blank">
-                                        {application.resume}
-                                    </Typography>
+                                    {application.resume && (
+                                        <Box mb={2}>
+                                            <Typography variant="subtitle1" gutterBottom>
+                                                Resume URL
+                                            </Typography>
+                                            <Link href={application.resume} target="_blank" rel="noopener noreferrer">
+                                                {application.resume} 
+                                            </Link>
+                                        </Box>
+                                    )}
 
                                     <Box mt={2}>
                                         <Button
@@ -146,10 +155,10 @@ const MyApplications: React.FC = () => {
                                     </Box>
                                 </CardContent>
                             </Card>
-                        </Grid>
+                        </Box>
                     );
                 })}
-            </Grid>
+            </Box>
         </Box>
     );
 };

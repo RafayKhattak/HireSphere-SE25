@@ -28,37 +28,54 @@ router.get('/', auth, async (req, res) => {
 // @desc    Create a new job alert
 // @access  Private
 router.post('/', auth, async (req, res) => {
+    console.log('[Job Alert Route - POST] Received request to create alert.'); // Log start
     try {
         // Ensure user is a job seeker
         if (req.user.type !== 'jobseeker') {
+            console.log(`[Job Alert Route - POST] Access denied: User ${req.user.id} is not a job seeker.`);
             return res.status(403).json({ message: 'Access denied. Only job seekers can create alerts.' });
         }
 
-        const { keywords, locations, jobTypes, salary, frequency } = req.body;
+        const { name, keywords, locations, jobTypes, salary, frequency, isActive } = req.body; // Added name, isActive
+        console.log('[Job Alert Route - POST] Request body:', req.body); // Log request body
+
+        // Basic validation
+        if (!keywords || !Array.isArray(keywords) || keywords.length === 0) {
+            console.log('[Job Alert Route - POST] Validation failed: Keywords array is required.');
+            return res.status(400).json({ message: 'Keywords are required' });
+        }
+        console.log('[Job Alert Route - POST] Validation passed.');
 
         // Create new job alert
         const newAlert = new JobAlert({
             jobSeeker: req.user.id,
-            keywords: keywords || [],
+            name: name || `Alert: ${keywords.join(', ').substring(0, 30)}...`, // Use provided name or generate one
+            keywords: keywords,
             locations: locations || [],
             jobTypes: jobTypes || [],
             salary: salary || { min: 0, max: 0 },
-            frequency: frequency || 'daily'
+            frequency: frequency || 'daily',
+            isActive: isActive !== undefined ? isActive : true // Use provided isActive or default to true
         });
+        console.log('[Job Alert Route - POST] New alert object prepared:', newAlert);
 
         const alert = await newAlert.save();
+        console.log(`[Job Alert Route - POST] Alert saved successfully with ID: ${alert._id}`);
         
         // Update user alert settings if not already enabled
-        if (!req.user.alertSettings.enabled) {
+        const user = await User.findById(req.user.id);
+        if (user && !user.alertSettings?.enabled) {
+            console.log(`[Job Alert Route - POST] Enabling alert setting for user ${req.user.id}`);
             await User.findByIdAndUpdate(req.user.id, {
                 'alertSettings.enabled': true
             });
         }
         
+        console.log('[Job Alert Route - POST] Sending success response (201 Created).');
         return res.status(201).json(alert);
     } catch (error) {
-        console.error('Error creating job alert:', error);
-        return res.status(500).json({ message: 'Server error' });
+        console.error('[Job Alert Route - POST] Error creating job alert:', error); // Log error
+        return res.status(500).json({ message: 'Server error creating alert' });
     }
 });
 

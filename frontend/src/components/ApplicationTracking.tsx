@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import { applicationService } from '../services/api';
 import {
   Container,
   Typography,
@@ -78,7 +78,7 @@ const ApplicationTracking: React.FC = () => {
     const fetchApplications = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/applications/jobseeker');
+        const response = await applicationService.getMyApplications();
         setApplications(response.data);
         setError(null);
       } catch (err: any) {
@@ -198,9 +198,9 @@ const ApplicationTracking: React.FC = () => {
             </Button>
           </Box>
         ) : (
-          <Grid container spacing={3}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
             {applications.map((application) => (
-              <Grid item xs={12} key={application._id}>
+              <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }} key={application._id}>
                 <Card elevation={3}>
                   <CardContent>
                     <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', mb: 2 }}>
@@ -314,9 +314,9 @@ const ApplicationTracking: React.FC = () => {
                     </Button>
                   </CardActions>
                 </Card>
-              </Grid>
+              </Box>
             ))}
-          </Grid>
+          </Box>
         )}
       </Paper>
     </Container>

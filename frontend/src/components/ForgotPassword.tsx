@@ -18,18 +18,22 @@ const ForgotPassword: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
+    const [message, setMessage] = useState('');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError('');
         setSuccess(false);
+        setMessage('');
 
         try {
             await authService.forgotPassword(email);
+            setMessage('Password reset link sent! Please check your email.');
             setSuccess(true);
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to send reset email');
+            console.error('Forgot password error:', err);
+            setError(err.response?.data?.message || 'Failed to send reset link. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -53,7 +57,7 @@ const ForgotPassword: React.FC = () => {
 
                 {success && (
                     <Alert severity="success" sx={{ mb: 2 }}>
-                        Password reset instructions have been sent to your email.
+                        {message}
                     </Alert>
                 )}
 

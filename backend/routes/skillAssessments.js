@@ -22,29 +22,40 @@ router.post('/generate', auth, async (req, res) => {
         }
 
         // Generate questions using AI
-        const questions = await generateSkillQuestions(
+        const aiResponse = await generateSkillQuestions(
             skill, 
             questionCount, 
             includeOpenEnded,
             aiProvider
         );
 
-        // Create a new assessment
+        // Check if the response has the expected structure and the questions property is an array
+        if (!aiResponse || !Array.isArray(aiResponse.questions)) {
+            console.error('Error generating skill assessment: AI response structure is invalid or questions array is missing. Response:', aiResponse);
+            return res.status(500).json({ message: 'Failed to parse questions from AI service response' });
+        }
+        
+        // Extract the actual questions array
+        const questionsArray = aiResponse.questions;
+
+        // Create a new assessment using the extracted array
         const assessment = new SkillAssessment({
             jobSeeker: req.user._id,
             skill,
-            questions: questions.map(q => ({
+            questions: questionsArray.map(q => ({
                 question: q.question,
                 options: q.options || [],
-                isOpenEnded: q.isOpenEnded
+                isOpenEnded: q.isOpenEnded || false // Ensure isOpenEnded has a default
             })),
             status: 'pending'
         });
 
+        console.log('Attempting to save assessment:', assessment);
         await assessment.save();
 
         res.status(201).json(assessment);
     } catch (error) {
+        console.log('Caught error in /generate route:');
         console.error('Error generating skill assessment:', error);
         res.status(500).json({ message: 'Error generating skill assessment', error: error.message });
     }

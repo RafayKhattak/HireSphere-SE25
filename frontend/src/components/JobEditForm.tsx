@@ -9,10 +9,15 @@ import {
     Typography,
     Paper,
     Alert,
-    Grid,
     CircularProgress,
     MenuItem,
-    InputAdornment
+    InputAdornment,
+    Container,
+    FormControl,
+    InputLabel,
+    FormHelperText,
+    Select,
+    useTheme
 } from '@mui/material';
 import { jobService } from '../services/api';
 import { Job, JobFormData } from '../types';
@@ -36,6 +41,7 @@ const JobEditForm: React.FC = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const theme = useTheme();
 
     const formik = useFormik<JobFormData>({
         initialValues: {
@@ -66,6 +72,7 @@ const JobEditForm: React.FC = () => {
                 setLoading(false);
             }
         },
+        enableReinitialize: true,
     });
 
     const fetchJobDetails = useCallback(async () => {
@@ -115,15 +122,15 @@ const JobEditForm: React.FC = () => {
     }
 
     return (
-        <Box>
+        <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
             <Paper elevation={3} sx={{ p: 4 }}>
-                <Typography variant="h4" component="h1" gutterBottom>
-                    Edit Job
-                </Typography>
-
+                <Typography variant="h4" gutterBottom>Edit Job</Typography>
+                
+                {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                
                 <form onSubmit={formik.handleSubmit}>
-                    <Grid container spacing={3}>
-                        <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}> 
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}> 
                             <TextField
                                 fullWidth
                                 id="title"
@@ -134,23 +141,9 @@ const JobEditForm: React.FC = () => {
                                 error={formik.touched.title && Boolean(formik.errors.title)}
                                 helperText={formik.touched.title && formik.errors.title}
                             />
-                        </Grid>
+                        </Box>
 
-                        <Grid item xs={12}>
-                            <TextField
-                                fullWidth
-                                id="company"
-                                name="company"
-                                label="Company"
-                                value={formik.values.company}
-                                onChange={formik.handleChange}
-                                error={formik.touched.company && Boolean(formik.errors.company)}
-                                helperText={(formik.touched.company && formik.errors.company) || "Company name is automatically set from your profile"}
-                                disabled={true}
-                            />
-                        </Grid>
-
-                        <Grid item xs={12}>
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}> 
                             <TextField
                                 fullWidth
                                 id="description"
@@ -158,84 +151,29 @@ const JobEditForm: React.FC = () => {
                                 label="Job Description"
                                 multiline
                                 rows={6}
-                                placeholder="Enter detailed job description. Use line breaks for better formatting."
                                 value={formik.values.description}
                                 onChange={formik.handleChange}
                                 error={formik.touched.description && Boolean(formik.errors.description)}
-                                helperText={(formik.touched.description && formik.errors.description) || "Use line breaks to separate paragraphs. This will be displayed with proper formatting."}
+                                helperText={formik.touched.description && formik.errors.description}
                             />
-                        </Grid>
+                        </Box>
 
-                        <Grid item xs={12}>
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}> 
                             <TextField
                                 fullWidth
                                 id="requirements"
                                 name="requirements"
                                 label="Requirements"
                                 multiline
-                                rows={6}
-                                placeholder="Enter job requirements. Use a new line for each requirement for better formatting."
+                                rows={4}
                                 value={formik.values.requirements}
                                 onChange={formik.handleChange}
                                 error={formik.touched.requirements && Boolean(formik.errors.requirements)}
-                                helperText={(formik.touched.requirements && formik.errors.requirements) || "Consider adding each requirement on a new line for a cleaner appearance."}
+                                helperText={formik.touched.requirements && formik.errors.requirements}
                             />
-                        </Grid>
+                        </Box>
 
-                        <Grid item xs={12} sm={4}>
-                            <TextField
-                                fullWidth
-                                id="salary.min"
-                                name="salary.min"
-                                label="Minimum Salary"
-                                type="number"
-                                value={formik.values.salary.min}
-                                onChange={formik.handleChange}
-                                error={formik.touched.salary?.min && Boolean(formik.errors.salary?.min)}
-                                helperText={formik.touched.salary?.min && formik.errors.salary?.min}
-                                InputProps={{
-                                    startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
-                                }}
-                            />
-                        </Grid>
-
-                        <Grid item xs={12} sm={4}>
-                            <TextField
-                                fullWidth
-                                id="salary.max"
-                                name="salary.max"
-                                label="Maximum Salary"
-                                type="number"
-                                value={formik.values.salary.max}
-                                onChange={formik.handleChange}
-                                error={formik.touched.salary?.max && Boolean(formik.errors.salary?.max)}
-                                helperText={formik.touched.salary?.max && formik.errors.salary?.max}
-                                InputProps={{
-                                    startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
-                                }}
-                            />
-                        </Grid>
-
-                        <Grid item xs={12} sm={4}>
-                            <TextField
-                                fullWidth
-                                id="salary.currency"
-                                name="salary.currency"
-                                label="Currency"
-                                select
-                                value={formik.values.salary.currency}
-                                onChange={formik.handleChange}
-                                error={formik.touched.salary?.currency && Boolean(formik.errors.salary?.currency)}
-                                helperText={formik.touched.salary?.currency && formik.errors.salary?.currency}
-                            >
-                                <MenuItem value="PKR">Pakistani Rupee (PKR)</MenuItem>
-                                <MenuItem value="USD">US Dollar (USD)</MenuItem>
-                                <MenuItem value="EUR">Euro (EUR)</MenuItem>
-                                <MenuItem value="GBP">British Pound (GBP)</MenuItem>
-                            </TextField>
-                        </Grid>
-
-                        <Grid item xs={12} sm={6}>
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%' } }}> 
                             <TextField
                                 fullWidth
                                 id="location"
@@ -246,47 +184,102 @@ const JobEditForm: React.FC = () => {
                                 error={formik.touched.location && Boolean(formik.errors.location)}
                                 helperText={formik.touched.location && formik.errors.location}
                             />
-                        </Grid>
+                        </Box>
 
-                        <Grid item xs={12} sm={6}>
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%' } }}> 
+                            <FormControl fullWidth error={formik.touched.type && Boolean(formik.errors.type)}>
+                                <InputLabel id="type-label">Job Type</InputLabel>
+                                <Select
+                                    labelId="type-label"
+                                    id="type"
+                                    name="type"
+                                    value={formik.values.type}
+                                    label="Job Type"
+                                    onChange={formik.handleChange}
+                                >
+                                    <MenuItem value="full-time">Full-time</MenuItem>
+                                    <MenuItem value="part-time">Part-time</MenuItem>
+                                    <MenuItem value="contract">Contract</MenuItem>
+                                    <MenuItem value="internship">Internship</MenuItem>
+                                </Select>
+                                {formik.touched.type && formik.errors.type && (
+                                    <FormHelperText>{formik.errors.type}</FormHelperText>
+                                )}
+                            </FormControl>
+                        </Box>
+
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '33.33%' } }}> 
                             <TextField
                                 fullWidth
-                                id="type"
-                                name="type"
-                                label="Job Type"
-                                select
-                                value={formik.values.type}
+                                id="salary.min"
+                                name="salary.min"
+                                label="Minimum Salary"
+                                type="number"
+                                value={formik.values.salary.min}
                                 onChange={formik.handleChange}
-                                error={formik.touched.type && Boolean(formik.errors.type)}
-                                helperText={formik.touched.type && formik.errors.type}
-                            >
-                                <MenuItem value="full-time">Full Time</MenuItem>
-                                <MenuItem value="part-time">Part Time</MenuItem>
-                                <MenuItem value="contract">Contract</MenuItem>
-                                <MenuItem value="internship">Internship</MenuItem>
-                            </TextField>
-                        </Grid>
-                    </Grid>
+                                error={formik.touched.salary?.min && Boolean(formik.errors.salary?.min)}
+                                helperText={formik.touched.salary?.min && formik.errors.salary?.min}
+                            />
+                        </Box>
+
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '33.33%' } }}> 
+                            <TextField
+                                fullWidth
+                                id="salary.max"
+                                name="salary.max"
+                                label="Maximum Salary"
+                                type="number"
+                                value={formik.values.salary.max}
+                                onChange={formik.handleChange}
+                                error={formik.touched.salary?.max && Boolean(formik.errors.salary?.max)}
+                                helperText={formik.touched.salary?.max && formik.errors.salary?.max}
+                            />
+                        </Box>
+
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '33.33%' } }}> 
+                            <FormControl fullWidth error={formik.touched.salary?.currency && Boolean(formik.errors.salary?.currency)}>
+                                <InputLabel id="currency-label">Currency</InputLabel>
+                                <Select
+                                    labelId="currency-label"
+                                    id="salary.currency"
+                                    name="salary.currency"
+                                    value={formik.values.salary.currency}
+                                    label="Currency"
+                                    onChange={formik.handleChange}
+                                >
+                                    <MenuItem value="USD">USD</MenuItem>
+                                    <MenuItem value="EUR">EUR</MenuItem>
+                                    <MenuItem value="GBP">GBP</MenuItem>
+                                    <MenuItem value="PKR">PKR</MenuItem>
+                                </Select>
+                                {formik.touched.salary?.currency && formik.errors.salary?.currency && (
+                                    <FormHelperText>{formik.errors.salary.currency}</FormHelperText>
+                                )}
+                            </FormControl>
+                        </Box>
+                    </Box> 
 
                     <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
                         <Button
                             type="submit"
                             variant="contained"
-                            sx={{ flex: 1 }}
+                            color="primary"
+                            disabled={formik.isSubmitting}
+                            startIcon={formik.isSubmitting && <CircularProgress size={20} />}
                         >
-                            Update Job
+                            {formik.isSubmitting ? 'Saving...' : 'Save Changes'}
                         </Button>
                         <Button
                             variant="outlined"
                             onClick={() => navigate(`/jobs/${id}`)}
-                            sx={{ flex: 1 }}
+                            disabled={formik.isSubmitting}
                         >
                             Cancel
                         </Button>
                     </Box>
                 </form>
             </Paper>
-        </Box>
+        </Container>
     );
 };
 

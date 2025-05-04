@@ -9,17 +9,16 @@ import {
   Box,
   TextField,
   Button,
-  Grid,
   CircularProgress,
   Alert,
   Divider,
-  MenuItem,
-  Select,
+  Avatar,
+  IconButton,
   FormControl,
   InputLabel,
-  SelectChangeEvent,
-  Avatar,
-  IconButton
+  Select,
+  MenuItem,
+  SelectChangeEvent
 } from '@mui/material';
 import BusinessIcon from '@mui/icons-material/Business';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
@@ -373,14 +372,14 @@ const EmployerProfile: React.FC = () => {
         {success && <Alert severity="success" sx={{ mb: 3 }}>{success}</Alert>}
         
         <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <Typography variant="h6" gutterBottom>
                 Basic Information
               </Typography>
-            </Grid>
+            </Box>
 
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Your Name"
                 value={name}
@@ -389,9 +388,9 @@ const EmployerProfile: React.FC = () => {
                 required
                 variant="outlined"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Company Name"
                 value={companyName}
@@ -400,9 +399,9 @@ const EmployerProfile: React.FC = () => {
                 required
                 variant="outlined"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Company Website"
                 value={companyWebsite}
@@ -411,9 +410,9 @@ const EmployerProfile: React.FC = () => {
                 variant="outlined"
                 placeholder="https://example.com"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <TextField
                 label="Company Description"
                 value={companyDescription}
@@ -425,9 +424,9 @@ const EmployerProfile: React.FC = () => {
                 rows={4}
                 placeholder="Describe your company, mission, culture, and what makes it a great place to work"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={4}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '33.33%' } }}>
               <FormControl fullWidth variant="outlined">
                 <InputLabel id="company-size-label">Company Size</InputLabel>
                 <Select
@@ -442,9 +441,9 @@ const EmployerProfile: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={4}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '33.33%' } }}>
               <FormControl fullWidth variant="outlined">
                 <InputLabel id="industry-label">Industry</InputLabel>
                 <Select
@@ -459,9 +458,9 @@ const EmployerProfile: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={4}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '33.33%' } }}>
               <TextField
                 label="Founded Year"
                 value={foundedYear}
@@ -471,16 +470,16 @@ const EmployerProfile: React.FC = () => {
                 type="number"
                 inputProps={{ min: 1800, max: new Date().getFullYear() }}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <Divider sx={{ my: 2 }} />
               <Typography variant="h6" gutterBottom>
                 Contact Information
               </Typography>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Phone"
                 value={phone}
@@ -488,9 +487,9 @@ const EmployerProfile: React.FC = () => {
                 fullWidth
                 variant="outlined"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Location"
                 value={location}
@@ -499,16 +498,16 @@ const EmployerProfile: React.FC = () => {
                 variant="outlined"
                 placeholder="City, State, Country"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <Divider sx={{ my: 2 }} />
               <Typography variant="h6" gutterBottom>
                 Social Media
               </Typography>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={4}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '33.33%' } }}>
               <TextField
                 label="LinkedIn"
                 value={linkedin}
@@ -517,9 +516,9 @@ const EmployerProfile: React.FC = () => {
                 variant="outlined"
                 placeholder="LinkedIn URL"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={4}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '33.33%' } }}>
               <TextField
                 label="Twitter"
                 value={twitter}
@@ -528,9 +527,9 @@ const EmployerProfile: React.FC = () => {
                 variant="outlined"
                 placeholder="Twitter URL"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={4}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '33.33%' } }}>
               <TextField
                 label="Facebook"
                 value={facebook}
@@ -539,9 +538,9 @@ const EmployerProfile: React.FC = () => {
                 variant="outlined"
                 placeholder="Facebook URL"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                 <Button
                   type="submit"
@@ -554,8 +553,8 @@ const EmployerProfile: React.FC = () => {
                   {saveLoading ? <CircularProgress size={24} /> : 'Save Changes'}
                 </Button>
               </Box>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </form>
       </Paper>
     </Container>

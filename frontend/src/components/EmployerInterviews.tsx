@@ -1,18 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Table, TableBody, TableCell, TableContainer, TableHead, 
   TableRow, Button, Chip, IconButton, Tooltip, TextField, MenuItem, Dialog, 
   DialogTitle, DialogContent, DialogActions, FormControl, InputLabel, Select, Grid,
-  TablePagination, CircularProgress, Alert
+  TablePagination, CircularProgress, Alert, List, ListItem, ListItemText, ListItemIcon, Divider
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { Edit, Delete, CalendarToday, Send, Refresh, VideoCall } from '@mui/icons-material';
+import Edit from '@mui/icons-material/Edit';
+import Delete from '@mui/icons-material/Delete';
+import CalendarToday from '@mui/icons-material/CalendarToday';
+import Send from '@mui/icons-material/Send';
+import Refresh from '@mui/icons-material/Refresh';
+import VideoCall from '@mui/icons-material/VideoCall';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { interviewService } from '../services/api';
+import { format } from 'date-fns';
 
 interface Interview {
   _id: string;
@@ -170,8 +176,8 @@ const InterviewDialog: React.FC<InterviewDialogProps> = ({
         {isEditing ? 'Edit Interview' : 'Schedule Interview'}
       </DialogTitle>
       <DialogContent>
-        <Grid container spacing={2} sx={{ mt: 1 }}>
-          <Grid item xs={12} md={6}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1), mt: 1 }}>
+          <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
             <LocalizationProvider dateAdapter={AdapterDateFns}>
               <DateTimePicker
                 label="Date & Time"
@@ -186,8 +192,8 @@ const InterviewDialog: React.FC<InterviewDialogProps> = ({
                 }}
               />
             </LocalizationProvider>
-          </Grid>
-          <Grid item xs={12} md={6}>
+          </Box>
+          <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
             <TextField
               fullWidth
               label="Duration (minutes)"
@@ -196,9 +202,9 @@ const InterviewDialog: React.FC<InterviewDialogProps> = ({
               onChange={(e) => setDuration(parseInt(e.target.value))}
               InputProps={{ inputProps: { min: 15, step: 15 } }}
             />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <FormControl fullWidth>
+          </Box>
+          <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
+            <FormControl fullWidth error={!!errors.location}>
               <InputLabel>Location Type</InputLabel>
               <Select
                 value={location}
@@ -210,8 +216,8 @@ const InterviewDialog: React.FC<InterviewDialogProps> = ({
                 <MenuItem value="phone">Phone</MenuItem>
               </Select>
             </FormControl>
-          </Grid>
-          <Grid item xs={12} md={6}>
+          </Box>
+          <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
             <FormControl fullWidth>
               <InputLabel>Interview Type</InputLabel>
               <Select
@@ -225,12 +231,12 @@ const InterviewDialog: React.FC<InterviewDialogProps> = ({
                 <MenuItem value="final">Final</MenuItem>
               </Select>
             </FormControl>
-          </Grid>
+          </Box>
           
           {location === 'remote' && (
-            <Grid item xs={12}>
-              <Grid container spacing={1}>
-                <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
+              <Box display="flex" alignItems="flex-end">
+                <Box sx={{ flexGrow: 1, pr: 1 }}>
                   <TextField
                     fullWidth
                     label="Meeting Link"
@@ -239,25 +245,29 @@ const InterviewDialog: React.FC<InterviewDialogProps> = ({
                     error={!!errors.meetingLink}
                     helperText={errors.meetingLink || 'Provide a video conference link (Zoom, Teams, etc.)'}
                   />
-                </Grid>
-                <Grid item xs={12}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<VideoCall />}
-                    onClick={handleGenerateGoogleMeetLink}
-                    disabled={generatingLink || !scheduledDateTime}
-                    sx={{ mt: 1 }}
-                  >
-                    {generatingLink ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
-                    {generatingLink ? 'Generating...' : 'Generate Google Meet Link'}
-                  </Button>
-                </Grid>
-              </Grid>
-            </Grid>
+                </Box>
+                <Box sx={{ flexShrink: 0 }}>
+                  <Tooltip title="Generate Google Meet Link">
+                    <span>
+                      <Button
+                        variant="outlined"
+                        startIcon={<VideoCall />}
+                        onClick={handleGenerateGoogleMeetLink}
+                        disabled={generatingLink || !scheduledDateTime}
+                        sx={{ mt: 1 }}
+                      >
+                        {generatingLink ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
+                        {generatingLink ? 'Generating...' : 'Generate Google Meet Link'}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </Box>
+              </Box>
+            </Box>
           )}
           
           {location === 'onsite' && (
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
               <TextField
                 fullWidth
                 label="Address"
@@ -268,10 +278,10 @@ const InterviewDialog: React.FC<InterviewDialogProps> = ({
                 multiline
                 rows={2}
               />
-            </Grid>
+            </Box>
           )}
           
-          <Grid item xs={12}>
+          <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
             <TextField
               fullWidth
               label="Description"
@@ -281,11 +291,11 @@ const InterviewDialog: React.FC<InterviewDialogProps> = ({
               rows={3}
               placeholder="Provide details about the interview, what to prepare, etc."
             />
-          </Grid>
+          </Box>
           
           {isEditing && (
-            <>
-              <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1), width: '100%', mt: 1, ml: 0 }}>
+              <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
                 <FormControl fullWidth>
                   <InputLabel>Status</InputLabel>
                   <Select
@@ -299,8 +309,8 @@ const InterviewDialog: React.FC<InterviewDialogProps> = ({
                     <MenuItem value="cancelled">Cancelled</MenuItem>
                   </Select>
                 </FormControl>
-              </Grid>
-              <Grid item xs={12}>
+              </Box>
+              <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
                 <TextField
                   fullWidth
                   label="Notes"
@@ -310,8 +320,8 @@ const InterviewDialog: React.FC<InterviewDialogProps> = ({
                   rows={2}
                   placeholder="Internal notes about the candidate or interview (not visible to the candidate)"
                 />
-              </Grid>
-              <Grid item xs={12}>
+              </Box>
+              <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
                 <TextField
                   fullWidth
                   label="Feedback"
@@ -321,10 +331,10 @@ const InterviewDialog: React.FC<InterviewDialogProps> = ({
                   rows={3}
                   placeholder="Post-interview feedback (not visible to the candidate)"
                 />
-              </Grid>
-            </>
+              </Box>
+            </Box>
           )}
-        </Grid>
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
@@ -370,7 +380,7 @@ const EmployerInterviews: React.FC = () => {
     fetchInterviews();
   }, [user]);
 
-  const fetchInterviews = async () => {
+  const fetchInterviews = useCallback(async () => {
     setLoading(true);
     setError(null);
     
@@ -383,7 +393,7 @@ const EmployerInterviews: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);

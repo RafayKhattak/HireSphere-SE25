@@ -7,10 +7,10 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
-const JobSeeker = require('../models/JobSeeker');
+const JobSeeker = require('../models/User');
 const { v4: uuidv4 } = require('uuid');
 const resumeParser = require('../services/resumeParser');
-const { GoogleGenerativeAI } = require('@google/genai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { authenticateUser, isJobSeeker } = require('../middleware/auth');
 
 // Set up multer for file storage
@@ -49,7 +49,7 @@ const upload = multer({
 });
 
 // Initialize Google Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIzaSyCKDyoST4sGKHYCNoTunjhQKk6VCXcB1fk");
 
 // @route   GET /api/jobseeker/profile
 // @desc    Get job seeker profile
@@ -93,7 +93,8 @@ router.put('/profile', auth, async (req, res) => {
             skills,
             education,
             experience,
-            profileImage
+            profileImage,
+            totalYearsExperience
         } = req.body;
 
         // Build profile update object
@@ -106,6 +107,15 @@ router.put('/profile', auth, async (req, res) => {
         if (location) profileFields.location = location;
         if (profileImage) profileFields.profileImage = profileImage;
         
+        if (totalYearsExperience !== undefined && totalYearsExperience !== null) {
+            const years = parseInt(totalYearsExperience);
+            if (!isNaN(years) && years >= 0) {
+                profileFields.totalYearsExperience = years;
+            } else {
+                console.warn(`[Jobseeker Profile Update] Invalid totalYearsExperience value received: ${totalYearsExperience}. Ignoring.`);
+            }
+        }
+        
         if (skills) {
             profileFields.skills = Array.isArray(skills) ? skills : skills.split(',').map(skill => skill.trim());
         }
@@ -113,19 +123,36 @@ router.put('/profile', auth, async (req, res) => {
         if (education) {
             profileFields.education = education;
         }
-        
+
+        // Log the received experience data before processing
+        console.log('[Jobseeker Profile Update] Received experience data:', JSON.stringify(experience));
+
         if (experience) {
-            profileFields.experience = experience;
+            // Optional: Add validation for the received experience array here if needed
+            profileFields.experience = experience; 
         }
 
         // Update job seeker profile
-        const jobSeeker = await User.findByIdAndUpdate(
-            req.user.id,
-            { $set: profileFields },
-            { new: true, runValidators: true }
-        ).select('-password');
+        console.log('[JobSeekerProfile Update] Attempting to update user with fields:', profileFields);
+        let updatedJobSeeker;
+        try {
+            updatedJobSeeker = await User.findByIdAndUpdate(
+                req.user.id,
+                { $set: profileFields },
+                { new: true, runValidators: true } // Keep runValidators
+            ).select('-password');
+            console.log('[JobSeekerProfile Update] User successfully updated in DB.');
+        } catch (updateError) {
+            console.error('[JobSeekerProfile Update] Error during User.findByIdAndUpdate:', updateError);
+            // If it's a validation error, log details
+            if (updateError.name === 'ValidationError') {
+                console.error('[JobSeekerProfile Update] Validation Errors:', updateError.errors);
+            }
+             // Rethrow or return error response
+            return res.status(500).json({ message: 'Error saving profile update', error: updateError.message });
+        }
         
-        return res.json(jobSeeker);
+        return res.json(updatedJobSeeker);
     } catch (error) {
         console.error('Error updating job seeker profile:', error);
         return res.status(500).json({ message: 'Server error', error: error.message });
@@ -398,16 +425,20 @@ async function parseResumeText(resumeText) {
  * @access  Private (Job Seekers only)
  */
 router.get('/salary-insights', auth, async (req, res) => {
+    console.log(`[SalaryInsights] Received request from user ID: ${req.user.id}`);
+    
     try {
         // Get the current user with detailed information
         const user = await User.findById(req.user.id);
         
         if (!user) {
+            console.log(`[SalaryInsights] User not found: ${req.user.id}`);
             return res.status(404).json({ error: 'User not found' });
         }
         
         // Verify user is a job seeker
         if (user.type !== 'jobseeker') {
+            console.log(`[SalaryInsights] Access denied: User ${req.user.id} is not a job seeker (type: ${user.type})`);
             return res.status(403).json({ error: 'Access denied. Not a job seeker.' });
         }
         
@@ -415,102 +446,290 @@ router.get('/salary-insights', auth, async (req, res) => {
         const skills = user.skills || [];
         const experience = user.experience || [];
         
-        // Calculate years of experience (roughly)
+        console.log(`[SalaryInsights] Processing for user with ${skills.length} skills and ${experience.length} experience entries`);
+        if (skills.length > 0) {
+            console.log(`[SalaryInsights] User skills: ${skills.join(', ')}`);
+        }
+        
+        // Calculate years of experience (safely)
         let totalExperienceYears = 0;
+        let validExperienceEntries = 0;
         
         experience.forEach(exp => {
-            const startDate = new Date(exp.from);
-            const endDate = exp.current ? new Date() : new Date(exp.to);
-            const years = (endDate - startDate) / (1000 * 60 * 60 * 24 * 365.25);
-            totalExperienceYears += Math.max(0, years); // Ensure no negative values
+            try {
+                // Only process entries with valid from/to dates
+                if (!exp.from) {
+                    console.log(`[SalaryInsights] Skipping experience entry with missing start date: ${exp.company || 'Unknown'}`);
+                    return;
+                }
+                
+                // Parse dates safely
+                let startDate = new Date(exp.from);
+                let endDate = exp.current ? new Date() : (exp.to ? new Date(exp.to) : new Date());
+                
+                // Validate dates
+                if (startDate.toString() === 'Invalid Date') {
+                    console.log(`[SalaryInsights] Invalid start date: ${exp.from} for ${exp.company || 'Unknown'}`);
+                    return;
+                }
+                
+                if (endDate.toString() === 'Invalid Date') {
+                    console.log(`[SalaryInsights] Invalid end date, using current date instead`);
+                    endDate = new Date();
+                }
+                
+                // Calculate duration in years
+                const durationMs = endDate.getTime() - startDate.getTime();
+                
+                // Skip negative durations
+                if (durationMs <= 0) {
+                    console.log(`[SalaryInsights] Skipping invalid duration: end date is before start date for ${exp.company || 'Unknown'}`);
+                    return;
+                }
+                
+                const years = durationMs / (1000 * 60 * 60 * 24 * 365.25);
+                console.log(`[SalaryInsights] Valid experience: ${Math.round(years * 10) / 10} years at ${exp.company || 'Unknown'}`);
+                
+                totalExperienceYears += years;
+                validExperienceEntries++;
+            } catch (error) {
+                console.error(`[SalaryInsights] Error processing experience entry:`, error);
+            }
         });
         
         // Round to nearest half year
         totalExperienceYears = Math.round(totalExperienceYears * 2) / 2;
+        console.log(`[SalaryInsights] Calculated total experience: ${totalExperienceYears} years from ${validExperienceEntries} valid entries`);
         
+        // Check if we should force refresh
+        const forceRefresh = req.query.refresh === 'true';
+        if (forceRefresh) {
+            console.log(`[SalaryInsights] Force refresh requested by user`);
+        }
+        
+        // Skip AI and directly use enhanced algorithm
+        console.log(`[SalaryInsights] Using enhanced salary calculation algorithm`);
         try {
-            // Use AI to generate salary insights
-            const insights = await generateSalaryInsights(skills, experience, totalExperienceYears);
+            const insights = generateEnhancedSalaryInsights(skills, totalExperienceYears);
+            console.log(`[SalaryInsights] Successfully generated enhanced insights with median salary: $${insights.salaryRange.median}`);
             return res.json(insights);
         } catch (error) {
-            console.error('Error generating AI salary insights:', error);
+            console.error('[SalaryInsights] Error in enhanced salary calculation:', error);
             
-            // Fallback to basic insights if AI fails
-            return res.json(generateBasicSalaryInsights(skills, totalExperienceYears));
+            // Ultimate fallback to basic insights with guaranteed valid values
+            console.log(`[SalaryInsights] Falling back to basic insights algorithm`);
+            const basicInsights = generateBasicSalaryInsights(skills, totalExperienceYears);
+            console.log(`[SalaryInsights] Basic insights generated with median salary: $${basicInsights.salaryRange.median}`);
+            return res.json(basicInsights);
         }
     } catch (error) {
-        console.error('Error in salary insights:', error);
+        console.error('[SalaryInsights] Error in salary insights:', error);
         return res.status(500).json({ error: 'Server error while generating salary insights' });
     }
 });
 
 /**
- * Generate salary insights using Gemini AI
+ * Generate enhanced salary insights algorithm
  */
-async function generateSalaryInsights(skills, experience, totalExperienceYears) {
-    // Create a model instance
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+function generateEnhancedSalaryInsights(skills, totalExperienceYears) {
+    console.log(`[SalaryInsights] Generating enhanced salary insights with algorithm`);
     
-    // Format experience for prompt
-    const formattedExperience = experience.map(exp => 
-        `${exp.title} at ${exp.company} (${
-            new Date(exp.from).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
-        } to ${
-            exp.current ? 'Present' : new Date(exp.to).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
-        }): ${exp.description}`
-    ).join('\n');
-    
-    // Construct prompt for AI
-    const prompt = `
-    Task: Analyze this job seeker's profile and provide detailed salary insights.
-    
-    JOB SEEKER DETAILS:
-    - Skills: ${skills.join(', ')}
-    - Total Years of Experience: ${totalExperienceYears}
-    - Experience Details:
-    ${formattedExperience}
-    
-    Please provide:
-    1. Salary range based on skills and experience (provide low, median, and high estimates)
-    2. Top 3 highest-paying roles this person could qualify for
-    3. Skills that could increase their earning potential (identify 3-5 complementary skills)
-    4. How their experience level affects salary expectations
-    5. Industry insights on compensation trends related to their skill set
-    
-    Format the response as a valid JSON object with these exact keys:
-    {
-      "salaryRange": { "low": number, "median": number, "high": number },
-      "topRoles": [{ "title": string, "medianSalary": number, "description": string }],
-      "valuableSkills": [{ "skill": string, "impact": string }],
-      "experienceImpact": string,
-      "industryTrends": string
+    // Ensure totalExperienceYears is valid
+    if (isNaN(totalExperienceYears) || totalExperienceYears < 0) {
+        console.log(`[SalaryInsights] Invalid experience years (${totalExperienceYears}), defaulting to 0`);
+        totalExperienceYears = 0;
     }
-    `;
     
-    try {
-        // Generate content
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        const text = response.text();
+    // Basic salary calculation based on years of experience - start higher than basic
+    let baseSalary = 65000; // Higher starting base
+    
+    // Add $7000 for each year of experience
+    const experienceBonus = Math.min(totalExperienceYears * 7000, 70000); // Cap at $70k extra
+    console.log(`[SalaryInsights] Experience bonus calculated: $${experienceBonus} for ${totalExperienceYears} years`);
+    
+    // Enhanced skills mapping with higher values
+    const skillValueMap = {
+        // Programming languages
+        'javascript': 3000,
+        'python': 4000,
+        'java': 3500,
+        'typescript': 3500,
+        'c++': 3000,
+        'c#': 3000,
+        'go': 4000,
+        'rust': 5000,
+        'php': 2000,
+        'ruby': 2500,
+        'swift': 3500,
+        'kotlin': 3500,
         
-        // Parse the JSON from the response
-        const jsonStr = text.match(/\{[\s\S]*\}/)?.[0] || text;
-        return JSON.parse(jsonStr);
-    } catch (error) {
-        console.error('Error in AI salary analysis:', error);
-        throw error;
+        // Frameworks
+        'react': 4000,
+        'angular': 3500,
+        'vue': 3500,
+        'node': 4000,
+        'django': 3000,
+        'flask': 3000,
+        'spring': 3500,
+        '.net': 3000,
+        
+        // Data Science & ML
+        'machine learning': 5000,
+        'data science': 5000,
+        'ai': 5000,
+        'tensorflow': 4500,
+        'pytorch': 4500,
+        'keras': 4000,
+        'pandas': 3000,
+        'numpy': 3000,
+        'scikit-learn': 3500,
+        
+        // Cloud & DevOps
+        'aws': 4500,
+        'azure': 4000,
+        'gcp': 4000,
+        'cloud': 3500,
+        'devops': 4500,
+        'kubernetes': 4500,
+        'docker': 4000,
+        'terraform': 4000,
+        'ci/cd': 3500,
+        
+        // Databases
+        'sql': 3000,
+        'nosql': 3000,
+        'mongodb': 3000,
+        'postgresql': 3500,
+        'mysql': 3000,
+        'redis': 3000,
+        
+        // Other
+        'graphql': 3500,
+        'rest api': 3000,
+        'git': 2000,
+        'agile': 2000,
+        'scrum': 2000
+    };
+    
+    let skillsBonus = 0;
+    let matchedSkills = [];
+    
+    if (skills && Array.isArray(skills)) {
+        skills.forEach(skill => {
+            if (!skill) return;
+            
+            const normalizedSkill = skill.toLowerCase();
+            
+            // Try exact matches first
+            if (skillValueMap[normalizedSkill] !== undefined) {
+                skillsBonus += skillValueMap[normalizedSkill];
+                matchedSkills.push(skill);
+                return;
+            }
+            
+            // Then try partial matches
+            for (const [key, value] of Object.entries(skillValueMap)) {
+                if (normalizedSkill.includes(key) || key.includes(normalizedSkill)) {
+                    skillsBonus += value;
+                    matchedSkills.push(`${skill} (matched with ${key})`);
+                    return;
+                }
+            }
+        });
     }
+    
+    skillsBonus = Math.min(skillsBonus, 40000); // Cap at $40k extra (higher cap)
+    console.log(`[SalaryInsights] Skills bonus calculated: $${skillsBonus} for ${matchedSkills.length} valuable skills`);
+    if (matchedSkills.length > 0) {
+        console.log(`[SalaryInsights] Matched valuable skills: ${matchedSkills.slice(0, 5).join(', ')}${matchedSkills.length > 5 ? '...' : ''}`);
+    }
+    
+    // Calculate location factor (simplified)
+    const locationFactor = 1.0; // Default factor
+    
+    // Calculate final salary - with safeguard against NaN
+    const medianSalaryUSD = Math.round((baseSalary + experienceBonus + skillsBonus) * locationFactor);
+    const finalMedianSalaryUSD = isNaN(medianSalaryUSD) ? 65000 : medianSalaryUSD; // Fallback if calculation fails
+    
+    // Convert to PKR (using approximate exchange rate)
+    const exchangeRate = 278; // 1 USD = 278 PKR (approx)
+    const finalMedianSalaryPKR = Math.round(finalMedianSalaryUSD * exchangeRate);
+    
+    console.log(`[SalaryInsights] Final median salary calculated: $${finalMedianSalaryUSD} (PKR ${finalMedianSalaryPKR})`);
+    
+    // Generate experience impact text
+    const experienceLevelText = 
+        totalExperienceYears < 1 ? 'entry-level' : 
+        totalExperienceYears < 3 ? 'junior' :
+        totalExperienceYears < 5 ? 'mid-level' :
+        totalExperienceYears < 8 ? 'senior' : 'expert';
+    
+    // Generate insights
+    return {
+        currency: "PKR",
+        salaryRange: {
+            low: Math.round(finalMedianSalaryPKR * 0.8),
+            median: finalMedianSalaryPKR,
+            high: Math.round(finalMedianSalaryPKR * 1.25)
+        },
+        topRoles: [
+            {
+                title: "Senior Software Engineer",
+                medianSalary: Math.round(finalMedianSalaryPKR * 1.05),
+                description: "Designs, develops, and maintains complex software systems and applications."
+            },
+            {
+                title: "Data Scientist",
+                medianSalary: Math.round(finalMedianSalaryPKR * 1.02),
+                description: "Analyzes and interprets complex data to help guide strategic decisions."
+            },
+            {
+                title: "Machine Learning Engineer",
+                medianSalary: Math.round(finalMedianSalaryPKR * 1.08),
+                description: "Builds AI systems that learn from data and automate predictive modeling."
+            }
+        ],
+        valuableSkills: [
+            {
+                skill: "Cloud Architecture",
+                impact: "Could increase salary potential by 15-20%"
+            },
+            {
+                skill: "MLOps",
+                impact: "Could increase salary potential by 12-18%"
+            },
+            {
+                skill: "Deep Learning",
+                impact: "Could increase salary potential by 10-15%"
+            },
+            {
+                skill: "System Design",
+                impact: "Could increase salary potential by 8-15% and open paths to architect roles"
+            }
+        ],
+        experienceImpact: `With ${totalExperienceYears} years of experience, you're at the ${experienceLevelText} range. Each additional year typically adds 5-10% to your base salary in the first 5 years, with diminishing returns after 8-10 years. Specialized experience in high-demand areas can significantly increase your value.`,
+        industryTrends: "The tech industry continues to see strong demand for AI/ML specialists and experienced software engineers. Remote work has expanded job opportunities globally, with companies competing for talent across borders. Cloud computing, AI, and cybersecurity remain the highest-paying specializations, with salaries increasing 8-12% annually in these domains."
+    };
 }
 
 /**
  * Generate basic salary insights without AI
  */
 function generateBasicSalaryInsights(skills, totalExperienceYears) {
+    console.log(`[SalaryInsights] Generating basic salary insights with algorithm`);
+    
+    // Ensure totalExperienceYears is valid
+    if (isNaN(totalExperienceYears) || totalExperienceYears < 0) {
+        console.log(`[SalaryInsights] Invalid experience years (${totalExperienceYears}), defaulting to 0`);
+        totalExperienceYears = 0;
+    }
+    
     // Basic salary calculation based on years of experience
-    let baseSalary = 50000; // Starting base
+    const baseSalary = 50000; // Starting base
     
     // Add $5000 for each year of experience
     const experienceBonus = Math.min(totalExperienceYears * 5000, 50000); // Cap at $50k extra
+    console.log(`[SalaryInsights] Experience bonus calculated: $${experienceBonus} for ${totalExperienceYears} years`);
     
     // Add bonus for in-demand skills
     const inDemandSkills = [
@@ -519,36 +738,59 @@ function generateBasicSalaryInsights(skills, totalExperienceYears) {
     ];
     
     let skillsBonus = 0;
-    skills.forEach(skill => {
-        if (inDemandSkills.some(s => skill.toLowerCase().includes(s))) {
-            skillsBonus += 2000; // $2000 per in-demand skill
-        }
-    });
+    let matchedSkills = [];
+    
+    if (skills && Array.isArray(skills)) {
+        skills.forEach(skill => {
+            if (!skill) return;
+            
+            const normalizedSkill = skill.toLowerCase();
+            for (const demandSkill of inDemandSkills) {
+                if (normalizedSkill.includes(demandSkill)) {
+                    skillsBonus += 2000; // $2000 per in-demand skill
+                    matchedSkills.push(skill);
+                    break; // Only count once per skill
+                }
+            }
+        });
+    }
     
     skillsBonus = Math.min(skillsBonus, 20000); // Cap at $20k extra
+    console.log(`[SalaryInsights] Skills bonus calculated: $${skillsBonus} for ${matchedSkills.length} in-demand skills`);
+    if (matchedSkills.length > 0) {
+        console.log(`[SalaryInsights] Matched in-demand skills: ${matchedSkills.join(', ')}`);
+    }
     
-    const medianSalary = baseSalary + experienceBonus + skillsBonus;
+    const medianSalaryUSD = baseSalary + experienceBonus + skillsBonus;
+    const finalMedianSalaryUSD = isNaN(medianSalaryUSD) ? 50000 : medianSalaryUSD; // Fallback if calculation fails
+    
+    // Convert to PKR (using approximate exchange rate)
+    const exchangeRate = 278; // 1 USD = 278 PKR (approx)
+    const finalMedianSalaryPKR = Math.round(finalMedianSalaryUSD * exchangeRate);
+    
+    console.log(`[SalaryInsights] Final median salary calculated: $${finalMedianSalaryUSD} (PKR ${finalMedianSalaryPKR})`);
     
     return {
+        currency: "PKR",
         salaryRange: {
-            low: Math.round(medianSalary * 0.8),
-            median: medianSalary,
-            high: Math.round(medianSalary * 1.2)
+            low: Math.round(finalMedianSalaryPKR * 0.8),
+            median: finalMedianSalaryPKR,
+            high: Math.round(finalMedianSalaryPKR * 1.2)
         },
         topRoles: [
             {
                 title: "Software Developer",
-                medianSalary: Math.round(medianSalary * 1.0),
+                medianSalary: Math.round(finalMedianSalaryPKR * 1.0),
                 description: "Develops software applications using various programming languages and frameworks."
             },
             {
                 title: "System Analyst",
-                medianSalary: Math.round(medianSalary * 0.95),
+                medianSalary: Math.round(finalMedianSalaryPKR * 0.95),
                 description: "Analyzes and designs information systems to meet business requirements."
             },
             {
                 title: "Project Manager",
-                medianSalary: Math.round(medianSalary * 1.1),
+                medianSalary: Math.round(finalMedianSalaryPKR * 1.1),
                 description: "Manages technology projects, teams, and resources to deliver results within constraints."
             }
         ],

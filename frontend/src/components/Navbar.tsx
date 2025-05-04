@@ -1,11 +1,16 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { ListItem, ListItemIcon, ListItemText } from '@mui/material';
+import { Link, LinkProps } from 'react-router-dom';
+import { ListItem, ListItemIcon, ListItemText, ListItemButton } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import WorkIcon from '@mui/icons-material/Work';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import BusinessIcon from '@mui/icons-material/Business';
+
+// Create a LinkComponent for use with Material UI
+const LinkComponent = React.forwardRef<HTMLAnchorElement, LinkProps>((props, ref) => (
+  <Link ref={ref} {...props} />
+));
 
 const Navbar = () => {
   const user = { type: 'employer' }; // Replace with actual user data
@@ -14,35 +19,45 @@ const Navbar = () => {
     <div>
       {user?.type === 'employer' && (
         <>
-          <ListItem component={Link} to="/dashboard" button>
-            <ListItemIcon>
-              <DashboardIcon />
-            </ListItemIcon>
-            <ListItemText primary="Dashboard" />
+          <ListItem disablePadding>
+            <ListItemButton component={LinkComponent} to="/dashboard">
+              <ListItemIcon>
+                <DashboardIcon />
+              </ListItemIcon>
+              <ListItemText primary="Dashboard" />
+            </ListItemButton>
           </ListItem>
-          <ListItem component={Link} to="/jobs/manage" button>
-            <ListItemIcon>
-              <WorkIcon />
-            </ListItemIcon>
-            <ListItemText primary="Manage Jobs" />
+          <ListItem disablePadding>
+            <ListItemButton component={LinkComponent} to="/jobs/manage">
+              <ListItemIcon>
+                <WorkIcon />
+              </ListItemIcon>
+              <ListItemText primary="Manage Jobs" />
+            </ListItemButton>
           </ListItem>
-          <ListItem component={Link} to="/applications/employer" button>
-            <ListItemIcon>
-              <AssignmentIcon />
-            </ListItemIcon>
-            <ListItemText primary="Applications" />
+          <ListItem disablePadding>
+            <ListItemButton component={LinkComponent} to="/applications/employer">
+              <ListItemIcon>
+                <AssignmentIcon />
+              </ListItemIcon>
+              <ListItemText primary="Applications" />
+            </ListItemButton>
           </ListItem>
-          <ListItem component={Link} to="/employer/candidates" button>
-            <ListItemIcon>
-              <PersonSearchIcon />
-            </ListItemIcon>
-            <ListItemText primary="Find Candidates" />
+          <ListItem disablePadding>
+            <ListItemButton component={LinkComponent} to="/employer/candidates">
+              <ListItemIcon>
+                <PersonSearchIcon />
+              </ListItemIcon>
+              <ListItemText primary="Find Candidates" />
+            </ListItemButton>
           </ListItem>
-          <ListItem component={Link} to="/employer/profile" button>
-            <ListItemIcon>
-              <BusinessIcon />
-            </ListItemIcon>
-            <ListItemText primary="Company Profile" />
+          <ListItem disablePadding>
+            <ListItemButton component={LinkComponent} to="/employer/profile">
+              <ListItemIcon>
+                <BusinessIcon />
+              </ListItemIcon>
+              <ListItemText primary="Company Profile" />
+            </ListItemButton>
           </ListItem>
         </>
       )}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { aiService } from '../services/aiService';
@@ -18,13 +18,20 @@ import {
   Alert,
   Divider,
   Rating,
-  Skeleton
+  Skeleton,
+  Pagination
 } from '@mui/material';
 import WorkIcon from '@mui/icons-material/Work';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import RecommendIcon from '@mui/icons-material/Recommend';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
+import { Link as RouterLink } from 'react-router-dom';
+import { recommendationService, bookmarkService } from '../services/api';
+import {
+  formatDistanceToNow,
+  parseISO
+} from 'date-fns';
 
 interface Job {
   _id: string;
@@ -60,26 +67,40 @@ const JobRecommendations: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [aiProcessing, setAiProcessing] = useState<boolean>(false);
   const [aiEnhanced, setAiEnhanced] = useState<boolean>(false);
+  const [bookmarkedJobs, setBookmarkedJobs] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 6;
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  useEffect(() => {
-    const fetchRecommendations = async () => {
-      try {
-        setLoading(true);
-        const response = await api.get('/recommendations/jobs');
-        setRecommendations(response.data);
-        setError(null);
-      } catch (err: any) {
-        console.error('Error fetching job recommendations:', err);
-        setError(err.response?.data?.message || 'Failed to load recommendations');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchRecommendations();
+  const fetchRecommendations = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await recommendationService.getJobRecommendations();
+      setRecommendations(response);
+    } catch (err: any) {
+      console.error('Error fetching job recommendations:', err);
+      setError(err.response?.data?.message || 'Failed to fetch recommendations');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  const fetchBookmarks = useCallback(async () => {
+    if (!user) return;
+    try {
+      const response = await bookmarkService.getBookmarks();
+      setBookmarkedJobs(new Set(response.map((job: Job) => job._id)));
+    } catch (err) {
+      console.error('Error fetching bookmarks:', err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchRecommendations();
+    fetchBookmarks();
+  }, [fetchRecommendations, fetchBookmarks]);
 
   const enhanceWithAI = async () => {
     if (!recommendations?.jobs.length || !user) return;
@@ -198,9 +219,9 @@ const JobRecommendations: React.FC = () => {
               </Typography>
             </Box>
             
-            <Grid container spacing={3}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
               {[1, 2, 3].map((_, index) => (
-                <Grid item xs={12} md={6} lg={4} key={index}>
+                <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%', lg: '33.33%' } }} key={index}>
                   <Card elevation={2}>
                     <CardContent>
                       <Skeleton variant="text" width="80%" height={40} />
@@ -215,9 +236,9 @@ const JobRecommendations: React.FC = () => {
                       <Skeleton variant="rectangular" width="100%" height={36} />
                     </CardActions>
                   </Card>
-                </Grid>
+                </Box>
               ))}
-            </Grid>
+            </Box>
           </Box>
         )}
         
@@ -244,9 +265,9 @@ const JobRecommendations: React.FC = () => {
                 </Button>
               </Box>
             ) : (
-              <Grid container spacing={3}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
                 {recommendations.jobs.map((job) => (
-                  <Grid item xs={12} md={6} lg={4} key={job._id}>
+                  <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%', lg: '33.33%' } }} key={job._id}>
                     <Card 
                       elevation={3} 
                       sx={{ 
@@ -332,9 +353,9 @@ const JobRecommendations: React.FC = () => {
                         </Button>
                       </CardActions>
                     </Card>
-                  </Grid>
+                  </Box>
                 ))}
-              </Grid>
+              </Box>
             )}
           </>
         )}

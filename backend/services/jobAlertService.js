@@ -20,6 +20,7 @@ const findMatchingJobs = async (alert, lastSentDate) => {
   try {
     // Base query - only open jobs
     let query = { status: 'open' };
+    console.log(`[Job Alert Match] Finding jobs for alert ${alert._id} (Seeker: ${alert.jobSeeker}) since ${lastSentDate || 'the beginning'}. Criteria:`, { keywords: alert.keywords, locations: alert.locations, jobTypes: alert.jobTypes }); // Log criteria
     
     // Add date filter if lastSentDate is provided
     if (lastSentDate) {
@@ -29,6 +30,7 @@ const findMatchingJobs = async (alert, lastSentDate) => {
     // Add keywords filter - search in title, description, and requirements
     if (alert.keywords && alert.keywords.length > 0) {
       const keywordRegexes = alert.keywords.map(keyword => new RegExp(keyword, 'i'));
+      console.log('[Job Alert Match] Keyword Regexes:', keywordRegexes); // Log the regex array
       query.$or = [
         { title: { $in: keywordRegexes } },
         { description: { $in: keywordRegexes } },
@@ -39,12 +41,15 @@ const findMatchingJobs = async (alert, lastSentDate) => {
     // Add locations filter
     if (alert.locations && alert.locations.length > 0) {
       const locationRegexes = alert.locations.map(location => new RegExp(location, 'i'));
+      console.log('[Job Alert Match] Location Regexes:', locationRegexes); // Log the regex array
       query.location = { $in: locationRegexes };
     }
     
-    // Add job types filter
+    // Add job types filter - Make it case-insensitive
     if (alert.jobTypes && alert.jobTypes.length > 0) {
-      query.type = { $in: alert.jobTypes };
+      const jobTypeRegexes = alert.jobTypes.map(type => new RegExp(`^${type}$`, 'i')); // Match full string, case-insensitive
+      console.log('[Job Alert Match] Job Type Regexes:', jobTypeRegexes); // Log the regex array
+      query.type = { $in: jobTypeRegexes };
     }
     
     // Add salary filter if specified
@@ -55,12 +60,16 @@ const findMatchingJobs = async (alert, lastSentDate) => {
       }
     }
     
+    console.log('[Job Alert Match] Final Query Object:', query); // Log the query object directly
+    // console.log(`[Job Alert Match] Executing query:`, JSON.stringify(query)); // Remove JSON.stringify version
+
     // Find matching jobs, sort by newest first
     const matchingJobs = await Job.find(query)
       .sort({ createdAt: -1 })
       .limit(10)
       .populate('employer', 'name companyName');
       
+    console.log(`[Job Alert Match] Found ${matchingJobs.length} matching jobs for alert ${alert._id}.`); // Log match count
     return matchingJobs;
   } catch (error) {
     console.error('Error finding matching jobs:', error);
@@ -131,9 +140,11 @@ const getPersonalizedDescriptions = async (jobSeeker, jobs) => {
 const sendAlertEmail = async (jobSeeker, alert, matchingJobs) => {
   try {
     if (!matchingJobs || matchingJobs.length === 0) {
+      console.log(`[Job Alert Email] No matching jobs found for alert ${alert._id} (Seeker: ${jobSeeker._id}). Skipping email.`); // Log skip
       return false;
     }
     
+    console.log(`[Job Alert Email] Preparing email for alert ${alert._id} to ${jobSeeker.email} with ${matchingJobs.length} jobs.`); // Log email prep
     // Try to get personalized descriptions if GEMINI_API_KEY is available
     const personalizedContent = await getPersonalizedDescriptions(jobSeeker, matchingJobs);
     
@@ -182,9 +193,10 @@ const sendAlertEmail = async (jobSeeker, alert, matchingJobs) => {
       html
     });
     
+    console.log(`[Job Alert Email] Successfully sent email to ${jobSeeker.email} for alert ${alert._id}.`); // Log success
     return true;
   } catch (error) {
-    console.error('Error sending job alert email:', error);
+    console.error(`[Job Alert Email] Error sending job alert email to ${jobSeeker.email} for alert ${alert._id}:`, error); // Log error
     return false;
   }
 };
@@ -195,7 +207,7 @@ const sendAlertEmail = async (jobSeeker, alert, matchingJobs) => {
  */
 const processJobAlerts = async (frequency) => {
   try {
-    console.log(`Processing ${frequency} job alerts...`);
+    console.log(`[Job Alert Process] Starting processing for frequency: ${frequency}...`);
     
     // Find all active alerts with the specified frequency
     const alerts = await JobAlert.find({
@@ -203,7 +215,7 @@ const processJobAlerts = async (frequency) => {
       frequency
     });
     
-    console.log(`Found ${alerts.length} active ${frequency} job alerts`);
+    console.log(`[Job Alert Process] Found ${alerts.length} active alerts for frequency: ${frequency}.`);
     
     // Process each alert
     for (const alert of alerts) {
@@ -212,10 +224,16 @@ const processJobAlerts = async (frequency) => {
         const jobSeeker = await User.findById(alert.jobSeeker);
         
         // Skip if job seeker not found or alerts not enabled
-        if (!jobSeeker || !jobSeeker.alertSettings?.enabled) {
+        if (!jobSeeker) {
+          console.log(`[Job Alert Process] Skipping alert ${alert._id} - Job seeker ${alert.jobSeeker} not found.`); // Log skip (no seeker)
           continue;
         }
+        if (!jobSeeker.alertSettings?.enabled) {
+           console.log(`[Job Alert Process] Skipping alert ${alert._id} for ${jobSeeker.email} - Alerts disabled in profile.`); // Log skip (disabled)
+           continue;
+        }
         
+        console.log(`[Job Alert Process] Processing alert ${alert._id} for ${jobSeeker.email}...`); // Log processing start
         // Find matching jobs since last alert sent
         const matchingJobs = await findMatchingJobs(alert, alert.lastSentAt);
         
@@ -233,16 +251,16 @@ const processJobAlerts = async (frequency) => {
             lastSentAt: new Date()
           });
           
-          console.log(`Sent ${frequency} job alert to ${jobSeeker.email} with ${matchingJobs.length} matches`);
+          console.log(`[Job Alert Process] Alert ${alert._id} processed successfully for ${jobSeeker.email}. Email sent.`); // Log success
         }
       } catch (error) {
-        console.error(`Error processing alert ${alert._id}:`, error);
+        console.error(`[Job Alert Process] Error processing single alert ${alert._id}:`, error); // Log single alert error
       }
     }
     
-    console.log(`Completed processing ${frequency} job alerts`);
+    console.log(`[Job Alert Process] Completed processing for frequency: ${frequency}.`);
   } catch (error) {
-    console.error(`Error processing ${frequency} job alerts:`, error);
+    console.error(`[Job Alert Process] Top-level error during processing for frequency ${frequency}:`, error); // Log top-level error
   }
 };
 
@@ -250,24 +268,27 @@ const processJobAlerts = async (frequency) => {
  * Initialize job alert schedulers
  */
 const initJobAlertSchedulers = () => {
-  console.log('Initializing job alert schedulers...');
+  console.log('[Job Alert Scheduler] Initializing cron schedules...');
   
   // Schedule daily job alerts (runs at 9:00 AM every day)
   cron.schedule('0 9 * * *', () => {
+    console.log('[Job Alert Scheduler] Triggering DAILY job alert processing...'); // Log trigger
     processJobAlerts('daily');
   });
   
   // Schedule weekly job alerts (runs at 10:00 AM every Monday)
   cron.schedule('0 10 * * 1', () => {
+    console.log('[Job Alert Scheduler] Triggering WEEKLY job alert processing...'); // Log trigger
     processJobAlerts('weekly');
   });
   
   // Schedule immediate job alerts (runs every hour)
   cron.schedule('0 * * * *', () => {
+    console.log('[Job Alert Scheduler] Triggering IMMEDIATE job alert processing (hourly)...'); // Log trigger
     processJobAlerts('immediate');
   });
   
-  console.log('Job alert schedulers initialized');
+  console.log('[Job Alert Scheduler] Cron schedules initialized.');
 };
 
 module.exports = {

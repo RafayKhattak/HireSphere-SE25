@@ -13,7 +13,10 @@ import {
     InputLabel,
     Select,
     MenuItem,
-    Grid
+    FormControlLabel,
+    RadioGroup,
+    FormLabel,
+    Radio
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 
@@ -112,8 +115,8 @@ const RegisterForm: React.FC = () => {
                     </Alert>
                 )}
                 <form onSubmit={formik.handleSubmit}>
-                    <Grid container spacing={2}>
-                        <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
                             <TextField
                                 fullWidth
                                 id="email"
@@ -124,8 +127,9 @@ const RegisterForm: React.FC = () => {
                                 error={formik.touched.email && Boolean(formik.errors.email)}
                                 helperText={formik.touched.email && formik.errors.email}
                             />
-                        </Grid>
-                        <Grid item xs={12}>
+                        </Box>
+
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
                             <TextField
                                 fullWidth
                                 id="password"
@@ -137,30 +141,24 @@ const RegisterForm: React.FC = () => {
                                 error={formik.touched.password && Boolean(formik.errors.password)}
                                 helperText={formik.touched.password && formik.errors.password}
                             />
-                        </Grid>
-                        <Grid item xs={12}>
-                            <FormControl fullWidth>
-                                <InputLabel id="type-label">User Type</InputLabel>
-                                <Select
-                                    labelId="type-label"
-                                    id="type"
+                        </Box>
+
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
+                            <FormControl component="fieldset">
+                                <FormLabel component="legend">Register As</FormLabel>
+                                <RadioGroup
+                                    row
                                     name="type"
                                     value={formik.values.type}
                                     onChange={formik.handleChange}
-                                    error={formik.touched.type && Boolean(formik.errors.type)}
-                                    label="User Type"
                                 >
-                                    <MenuItem value="jobseeker">Job Seeker</MenuItem>
-                                    <MenuItem value="employer">Employer</MenuItem>
-                                </Select>
-                                {formik.touched.type && formik.errors.type && (
-                                    <Typography color="error" variant="caption">
-                                        {formik.errors.type}
-                                    </Typography>
-                                )}
+                                    <FormControlLabel value="jobseeker" control={<Radio />} label="Job Seeker" />
+                                    <FormControlLabel value="employer" control={<Radio />} label="Employer" />
+                                </RadioGroup>
                             </FormControl>
-                        </Grid>
-                        <Grid item xs={12}>
+                        </Box>
+
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
                             <TextField
                                 fullWidth
                                 id="name"
@@ -171,11 +169,11 @@ const RegisterForm: React.FC = () => {
                                 error={formik.touched.name && Boolean(formik.errors.name)}
                                 helperText={formik.touched.name && formik.errors.name}
                             />
-                        </Grid>
+                        </Box>
 
                         {formik.values.type === 'jobseeker' && (
                             <>
-                                <Grid item xs={12} sm={6}>
+                                <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%' } }}>
                                     <TextField
                                         fullWidth
                                         id="firstName"
@@ -186,8 +184,8 @@ const RegisterForm: React.FC = () => {
                                         error={formik.touched.firstName && Boolean(formik.errors.firstName)}
                                         helperText={formik.touched.firstName && formik.errors.firstName}
                                     />
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
+                                </Box>
+                                <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%' } }}>
                                     <TextField
                                         fullWidth
                                         id="lastName"
@@ -198,13 +196,13 @@ const RegisterForm: React.FC = () => {
                                         error={formik.touched.lastName && Boolean(formik.errors.lastName)}
                                         helperText={formik.touched.lastName && formik.errors.lastName}
                                     />
-                                </Grid>
+                                </Box>
                             </>
                         )}
 
                         {formik.values.type === 'employer' && (
                             <>
-                                <Grid item xs={12}>
+                                <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
                                     <TextField
                                         fullWidth
                                         id="companyName"
@@ -215,8 +213,8 @@ const RegisterForm: React.FC = () => {
                                         error={formik.touched.companyName && Boolean(formik.errors.companyName)}
                                         helperText={formik.touched.companyName && formik.errors.companyName}
                                     />
-                                </Grid>
-                                <Grid item xs={12}>
+                                </Box>
+                                <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
                                     <TextField
                                         fullWidth
                                         id="companyDescription"
@@ -229,11 +227,11 @@ const RegisterForm: React.FC = () => {
                                         error={formik.touched.companyDescription && Boolean(formik.errors.companyDescription)}
                                         helperText={formik.touched.companyDescription && formik.errors.companyDescription}
                                     />
-                                </Grid>
+                                </Box>
                             </>
                         )}
 
-                        <Grid item xs={12} sm={6}>
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%' } }}>
                             <TextField
                                 fullWidth
                                 id="phone"
@@ -244,8 +242,8 @@ const RegisterForm: React.FC = () => {
                                 error={formik.touched.phone && Boolean(formik.errors.phone)}
                                 helperText={formik.touched.phone && formik.errors.phone}
                             />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
+                        </Box>
+                        <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%' } }}>
                             <TextField
                                 fullWidth
                                 id="location"
@@ -256,8 +254,8 @@ const RegisterForm: React.FC = () => {
                                 error={formik.touched.location && Boolean(formik.errors.location)}
                                 helperText={formik.touched.location && formik.errors.location}
                             />
-                        </Grid>
-                    </Grid>
+                        </Box>
+                    </Box>
 
                     <Button
                         type="submit"

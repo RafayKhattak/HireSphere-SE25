@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
 import {
   Container,
   Typography,
   Paper,
   Box,
-  Grid,
   Card,
   CardContent,
   Button,
@@ -45,6 +43,7 @@ import {
   ArcElement
 } from 'chart.js';
 import { useTheme } from '@mui/material/styles';
+import { jobService } from '../services/api';
 
 interface JobDetails {
   _id: string;
@@ -104,33 +103,57 @@ const JobPostAnalytics: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const theme = useTheme();
+  const [tabValue, setTabValue] = useState(0);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
       if (!jobId) return;
       
+      console.log(`[JobAnalytics] Fetching analytics for job ID: ${jobId}`);
       try {
         setLoading(true);
-        const response = await api.get(`/employer/jobs/${jobId}/analytics`);
-        setAnalytics(response.data);
+        const response = await jobService.getJobAnalytics(jobId);
+        console.log(`[JobAnalytics] Successfully retrieved analytics data:`, response);
+        
+        // Log key metrics
+        if (response) {
+          console.log(`[JobAnalytics] Key metrics - Views: ${response.views}, Applications: ${response.applications}`);
+          
+          if (response.dailyStats && response.dailyStats.length > 0) {
+            console.log(`[JobAnalytics] Daily stats available for ${response.dailyStats.length} days`);
+          }
+          
+          if (response.demographics) {
+            const locationsCount = response.demographics.locations?.length || 0;
+            const skillsCount = response.demographics.skills?.length || 0;
+            console.log(`[JobAnalytics] Demographics - ${locationsCount} locations, ${skillsCount} skills recorded`);
+          }
+        }
+        
+        setAnalytics(response);
         setError(null);
       } catch (err: any) {
-        console.error('Error fetching job analytics:', err);
+        console.error('[JobAnalytics] Error fetching job analytics:', err);
+        console.error('[JobAnalytics] Error details:', err.response?.data || err.message);
         setError(err.response?.data?.message || 'Failed to load analytics');
       } finally {
         setLoading(false);
+        console.log('[JobAnalytics] Completed loading process');
       }
     };
 
     if (user && user.type === 'employer') {
+      console.log('[JobAnalytics] Authorized employer accessing analytics');
       fetchAnalytics();
     } else {
+      console.warn('[JobAnalytics] Unauthorized access attempt - user type:', user?.type);
       setError('Only employers can access analytics');
       setLoading(false);
     }
   }, [jobId, user]);
 
   const handleBack = () => {
+    console.log('[JobAnalytics] Navigating back to manage jobs');
     navigate('/manage-jobs');
   };
 
@@ -182,11 +205,11 @@ const JobPostAnalytics: React.FC = () => {
       datasets: [
         {
           data: [
-            analytics.viewSources.direct,
-            analytics.viewSources.search,
-            analytics.viewSources.recommendation,
-            analytics.viewSources.email,
-            analytics.viewSources.other
+            analytics.viewSources?.direct || 0,
+            analytics.viewSources?.search || 0,
+            analytics.viewSources?.recommendation || 0,
+            analytics.viewSources?.email || 0,
+            analytics.viewSources?.other || 0
           ],
           backgroundColor: [
             theme.palette.primary.main,
@@ -213,6 +236,7 @@ const JobPostAnalytics: React.FC = () => {
   };
 
   if (loading) {
+    console.log('[JobAnalytics] Rendering loading state');
     return (
       <Container maxWidth="lg" sx={{ mt: 4, textAlign: 'center' }}>
         <CircularProgress />
@@ -224,6 +248,7 @@ const JobPostAnalytics: React.FC = () => {
   }
 
   if (error) {
+    console.log(`[JobAnalytics] Rendering error state: ${error}`);
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
         <Alert severity="error">{error}</Alert>
@@ -241,6 +266,7 @@ const JobPostAnalytics: React.FC = () => {
 
   // If no analytics data yet
   if (!analytics || analytics.views === 0) {
+    console.log('[JobAnalytics] No analytics data available yet');
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
         <Paper elevation={2} sx={{ p: 3, mb: 4, borderRadius: 2 }}>
@@ -273,6 +299,9 @@ const JobPostAnalytics: React.FC = () => {
   // Prepare chart data
   const chartData = prepareChartData();
 
+  // Log when rendering the full analytics view
+  console.log('[JobAnalytics] Rendering full analytics dashboard');
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
       <Paper elevation={2} sx={{ p: 3, mb: 4, borderRadius: 2 }}>
@@ -293,8 +322,8 @@ const JobPostAnalytics: React.FC = () => {
         <Divider sx={{ mb: 4 }} />
         
         {/* Analytics Overview Cards */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={3}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5), mb: 4 }}>
+          <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%', md: '25%' } }}>
             <Card elevation={3}>
               <CardContent sx={{ textAlign: 'center' }}>
                 <VisibilityIcon sx={{ fontSize: 40, color: 'primary.main', mb: 1 }} />
@@ -306,9 +335,9 @@ const JobPostAnalytics: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
           
-          <Grid item xs={12} sm={6} md={3}>
+          <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%', md: '25%' } }}>
             <Card elevation={3}>
               <CardContent sx={{ textAlign: 'center' }}>
                 <PeopleAltIcon sx={{ fontSize: 40, color: 'secondary.main', mb: 1 }} />
@@ -320,9 +349,9 @@ const JobPostAnalytics: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
           
-          <Grid item xs={12} sm={6} md={3}>
+          <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%', md: '25%' } }}>
             <Card elevation={3}>
               <CardContent sx={{ textAlign: 'center' }}>
                 <GroupIcon sx={{ fontSize: 40, color: 'success.main', mb: 1 }} />
@@ -334,9 +363,9 @@ const JobPostAnalytics: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
           
-          <Grid item xs={12} sm={6} md={3}>
+          <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%', md: '25%' } }}>
             <Card elevation={3}>
               <CardContent sx={{ textAlign: 'center' }}>
                 <WorkIcon sx={{ fontSize: 40, color: 'info.main', mb: 1 }} />
@@ -348,13 +377,13 @@ const JobPostAnalytics: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
         
         {/* Performance Over Time Chart */}
         {chartData && (
-          <Grid container spacing={4} sx={{ mb: 4 }}>
-            <Grid item xs={12}>
+          <Box sx={{ mb: 4 }}>
+            <Box sx={{ width: '100%' }}>
               <Typography variant="h6" gutterBottom>
                 <TrendingUpIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
                 Performance Over Time
@@ -381,13 +410,13 @@ const JobPostAnalytics: React.FC = () => {
                   }}
                 />
               </Paper>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         )}
         
-        <Grid container spacing={4}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-2) }}>
           {/* View Sources Chart */}
-          <Grid item xs={12} md={6}>
+          <Box sx={{ padding: theme => theme.spacing(2), width: { xs: '100%', md: '50%' } }}>
             <Typography variant="h6" gutterBottom>
               <PieChartIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
               Traffic Sources
@@ -415,16 +444,16 @@ const JobPostAnalytics: React.FC = () => {
                 </Box>
               )}
             </Paper>
-          </Grid>
+          </Box>
           
           {/* Applicant Locations */}
-          <Grid item xs={12} md={6}>
+          <Box sx={{ padding: theme => theme.spacing(2), width: { xs: '100%', md: '50%' } }}>
             <Typography variant="h6" gutterBottom>
               <BarChartIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
               Applicant Locations
             </Typography>
             
-            {analytics.demographics.locations && analytics.demographics.locations.length > 0 ? (
+            {analytics.demographics && analytics.demographics.locations && analytics.demographics.locations.length > 0 ? (
               <Paper elevation={1} sx={{ p: 2, height: 300 }}>
                 <Bar
                   data={{
@@ -463,36 +492,36 @@ const JobPostAnalytics: React.FC = () => {
                 </Typography>
               </Paper>
             )}
-          </Grid>
+          </Box>
           
           {/* Engagement Metrics */}
-          <Grid item xs={12}>
+          <Box sx={{ padding: theme => theme.spacing(2), width: '100%' }}>
             <Typography variant="h6" gutterBottom>
               <BarChartIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
               Engagement Metrics
             </Typography>
             
             <Paper elevation={1} sx={{ p: 2 }}>
-              <Grid container spacing={2}>
-                <Grid item xs={6} sm={3}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1) }}>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '50%', sm: '25%' } }}>
                   <Box sx={{ textAlign: 'center', p: 2 }}>
                     <Typography variant="h5">{analytics.views}</Typography>
                     <Typography variant="body2" color="text.secondary">Total Views</Typography>
                   </Box>
-                </Grid>
-                <Grid item xs={6} sm={3}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '50%', sm: '25%' } }}>
                   <Box sx={{ textAlign: 'center', p: 2 }}>
                     <Typography variant="h5">{analytics.uniqueViews}</Typography>
                     <Typography variant="body2" color="text.secondary">Unique Viewers</Typography>
                   </Box>
-                </Grid>
-                <Grid item xs={6} sm={3}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '50%', sm: '25%' } }}>
                   <Box sx={{ textAlign: 'center', p: 2 }}>
                     <Typography variant="h5">{analytics.clickThroughs}</Typography>
                     <Typography variant="body2" color="text.secondary">Click-throughs</Typography>
                   </Box>
-                </Grid>
-                <Grid item xs={6} sm={3}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '50%', sm: '25%' } }}>
                   <Box sx={{ textAlign: 'center', p: 2 }}>
                     <Typography variant="h5">
                       {analytics.clickThroughs > 0 ? 
@@ -501,22 +530,22 @@ const JobPostAnalytics: React.FC = () => {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">Click-to-Apply Rate</Typography>
                   </Box>
-                </Grid>
-              </Grid>
+                </Box>
+              </Box>
             </Paper>
-          </Grid>
+          </Box>
           
           {/* Skills */}
-          <Grid item xs={12}>
+          <Box sx={{ padding: theme => theme.spacing(2), width: '100%' }}>
             <Typography variant="h6" gutterBottom>
               Top Applicant Skills
             </Typography>
             
-            {analytics.demographics.skills && analytics.demographics.skills.length > 0 ? (
+            {analytics.demographics && analytics.demographics.skills && analytics.demographics.skills.length > 0 ? (
               <Paper elevation={1} sx={{ p: 2 }}>
-                <Grid container spacing={2}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1) }}>
                   {analytics.demographics.skills.slice(0, 10).map((skill, index) => (
-                    <Grid item xs={6} sm={4} md={3} key={index}>
+                    <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '50%', sm: '33.33%', md: '25%' } }} key={index}>
                       <Box sx={{ 
                         p: 1, 
                         borderRadius: 1, 
@@ -531,9 +560,9 @@ const JobPostAnalytics: React.FC = () => {
                           {skill.count} applicant{skill.count !== 1 ? 's' : ''}
                         </Typography>
                       </Box>
-                    </Grid>
+                    </Box>
                   ))}
-                </Grid>
+                </Box>
               </Paper>
             ) : (
               <Paper elevation={1} sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -542,8 +571,8 @@ const JobPostAnalytics: React.FC = () => {
                 </Typography>
               </Paper>
             )}
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
         
         <Box sx={{ mt: 4, textAlign: 'right' }}>
           <Typography variant="caption" color="text.secondary">

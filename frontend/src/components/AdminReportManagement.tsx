@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -24,7 +24,6 @@ import {
   Select,
   FormControl,
   InputLabel,
-  Grid,
   Card,
   CardContent,
   Pagination,
@@ -33,7 +32,8 @@ import {
   Divider
 } from '@mui/material';
 import { format } from 'date-fns';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../context/AuthContext';
+import { reportService } from '../services/api';
 
 interface Report {
   _id: string;
@@ -126,47 +126,60 @@ const AdminReportManagement: React.FC = () => {
 
   // Check if user is admin and redirect if not
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    if (user && user.type !== 'admin') {
+      console.log('[FraudManagement] User is not admin, redirecting to dashboard');
       navigate('/dashboard');
+    } else if (user && user.type === 'admin') {
+      console.log('[FraudManagement] Admin user authenticated: ' + user.email);
     }
   }, [user, navigate]);
 
-  // Fetch reports based on current tab and page
-  useEffect(() => {
-    const fetchReports = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const entityType = tab === 0 ? 'Job' : 'User';
-        const response = await axios.get('/api/reports', {
-          params: { 
-            entityType,
-            page,
-            limit: 10
-          }
-        });
-        
-        setReports(response.data.reports);
-        setTotalPages(response.data.pagination.pages);
-        setLoading(false);
-      } catch (err: any) {
-        setError(err.response?.data?.msg || 'Error fetching reports');
-        setLoading(false);
-      }
-    };
-
-    fetchReports();
+  const fetchReports = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    console.log('[FraudManagement] Fetching reports for tab:', tab === 0 ? 'Jobs' : 'Users');
+    try {
+      const entityType = tab === 0 ? 'Job' : 'User';
+      const params = {
+        entityType,
+        page,
+        limit: 10
+      };
+      console.log('[FraudManagement] Request params:', params);
+      
+      const response = await reportService.getReports(params);
+      console.log(`[FraudManagement] Received ${response.reports?.length || 0} reports`);
+      setReports(response.reports || []);
+      setTotalPages(response.pagination?.pages || 1);
+    } catch (err: any) {
+      console.error('[FraudManagement] Error fetching reports:', err);
+      setError(err.response?.data?.message || 'Failed to load reports');
+    } finally {
+      setLoading(false);
+    }
   }, [tab, page]);
+
+  // Fetch reports when tab or page changes
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports, tab, page]);
 
   // Fetch statistics
   useEffect(() => {
     const fetchStats = async () => {
+      console.log('[FraudManagement] Fetching report statistics');
       try {
         const response = await axios.get('/api/reports/statistics/summary');
+        console.log('[FraudManagement] Report statistics:', response.data);
         setStats(response.data);
+        
+        // Log important metrics
+        if (response.data) {
+          console.log(`[FraudManagement] Pending reports: ${response.data.byStatus.pending}`);
+          console.log(`[FraudManagement] Fraudulent job reports: ${response.data.byEntityType.job}`);
+        }
       } catch (err: any) {
-        console.error('Error fetching stats:', err);
+        console.error('[FraudManagement] Error fetching stats:', err);
       }
     };
 
@@ -174,15 +187,19 @@ const AdminReportManagement: React.FC = () => {
   }, []);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    console.log(`[FraudManagement] Switching to tab: ${newValue === 0 ? 'Jobs' : 'Users'}`);
     setTab(newValue);
     setPage(1);
   };
 
   const handlePageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
+    console.log(`[FraudManagement] Changing to page ${value}`);
     setPage(value);
   };
 
   const handleOpenDialog = (report: Report) => {
+    console.log(`[FraudManagement] Opening report review dialog for ID: ${report._id}`);
+    console.log(`[FraudManagement] Report details: ${report.entityType} - ${report.reason}`);
     setSelectedReport(report);
     setReportStatus(report.status);
     setAdminNotes(report.adminNotes || '');
@@ -191,6 +208,7 @@ const AdminReportManagement: React.FC = () => {
   };
 
   const handleCloseDialog = () => {
+    console.log('[FraudManagement] Closing report review dialog');
     setOpenDialog(false);
     setSelectedReport(null);
   };
@@ -199,27 +217,24 @@ const AdminReportManagement: React.FC = () => {
     if (!selectedReport) return;
 
     try {
+      console.log(`[FraudManagement] Submitting report review for ID: ${selectedReport._id}`);
+      console.log(`[FraudManagement] Status: ${reportStatus}, Action: ${actionTaken}`);
+      
       setLoading(true);
       
-      await axios.put(`/api/reports/${selectedReport._id}`, {
+      await reportService.updateReport(selectedReport._id, {
         status: reportStatus,
         adminNotes,
         actionTaken
       });
       
-      // Refresh reports
-      const entityType = tab === 0 ? 'Job' : 'User';
-      const response = await axios.get('/api/reports', {
-        params: { 
-          entityType,
-          page,
-          limit: 10
-        }
-      });
+      console.log(`[FraudManagement] Report updated successfully`);
       
-      setReports(response.data.reports);
+      // Refresh reports
+      await fetchReports();
       
       // Refresh stats
+      console.log('[FraudManagement] Refreshing statistics after update');
       const statsResponse = await axios.get('/api/reports/statistics/summary');
       setStats(statsResponse.data);
       
@@ -229,6 +244,7 @@ const AdminReportManagement: React.FC = () => {
       handleCloseDialog();
       setLoading(false);
     } catch (err: any) {
+      console.error('[FraudManagement] Error updating report:', err);
       setError(err.response?.data?.msg || 'Error updating report');
       setLoading(false);
     }
@@ -243,9 +259,9 @@ const AdminReportManagement: React.FC = () => {
       {/* Stats Cards */}
       {stats && (
         <Box sx={{ mb: 4 }}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%', md: '25%' } }}>
+              <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>Total Reports</Typography>
                   <Typography variant="h3">{stats.total}</Typography>
@@ -258,33 +274,33 @@ const AdminReportManagement: React.FC = () => {
                   </Typography>
                 </CardContent>
               </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
+            </Box>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%', md: '25%' } }}>
+              <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>Job Reports</Typography>
                   <Typography variant="h3">{stats.byEntityType.job}</Typography>
                   <Divider sx={{ my: 1 }} />
                   <Typography variant="body2">
-                    {((stats.byEntityType.job / stats.total) * 100).toFixed(1)}% of total
+                    {stats.total > 0 ? ((stats.byEntityType.job / stats.total) * 100).toFixed(1) : '0.0'}% of total
                   </Typography>
                 </CardContent>
               </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
+            </Box>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%', md: '25%' } }}>
+              <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>User Reports</Typography>
                   <Typography variant="h3">{stats.byEntityType.user}</Typography>
                   <Divider sx={{ my: 1 }} />
                   <Typography variant="body2">
-                    {((stats.byEntityType.user / stats.total) * 100).toFixed(1)}% of total
+                     {stats.total > 0 ? ((stats.byEntityType.user / stats.total) * 100).toFixed(1) : '0.0'}% of total
                   </Typography>
                 </CardContent>
               </Card>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Card>
+            </Box>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: '50%', md: '25%' } }}>
+              <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>Actions Taken</Typography>
                   <Typography variant="h3">{stats.byAction.warning + stats.byAction.disabled + stats.byAction.deleted}</Typography>
@@ -300,8 +316,8 @@ const AdminReportManagement: React.FC = () => {
                   </Typography>
                 </CardContent>
               </Card>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </Box>
       )}
 
@@ -417,24 +433,24 @@ const AdminReportManagement: React.FC = () => {
         <DialogContent>
           {selectedReport && (
             <Box sx={{ pt: 1 }}>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1) }}>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
                   <Typography variant="subtitle1">Reported By:</Typography>
                   <Typography variant="body1">
                     {selectedReport.reporter.name} ({selectedReport.reporter.email})
                   </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
                   <Typography variant="subtitle1">Date Reported:</Typography>
                   <Typography variant="body1">
                     {format(new Date(selectedReport.createdAt), 'MMM d, yyyy h:mm a')}
                   </Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
                   <Typography variant="subtitle1">Entity Type:</Typography>
                   <Typography variant="body1">{selectedReport.entityType}</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
                   <Typography variant="subtitle1">
                     {selectedReport.entityType === 'Job' ? 'Job Title:' : 'User:'}
                   </Typography>
@@ -444,23 +460,23 @@ const AdminReportManagement: React.FC = () => {
                       : `${selectedReport.entityId.name} (${selectedReport.entityId.email})`
                     }
                   </Typography>
-                </Grid>
-                <Grid item xs={12}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
                   <Typography variant="subtitle1">Reason:</Typography>
                   <Typography variant="body1">{selectedReport.reason}</Typography>
-                </Grid>
-                <Grid item xs={12}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
                   <Typography variant="subtitle1">Details:</Typography>
                   <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                     {selectedReport.details}
                   </Typography>
-                </Grid>
-                <Grid item xs={12}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="h6">Admin Actions</Typography>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth margin="normal">
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
+                  <FormControl fullWidth margin="normal" sx={{ m: 0 }}>
                     <InputLabel>Report Status</InputLabel>
                     <Select
                       value={reportStatus}
@@ -472,9 +488,9 @@ const AdminReportManagement: React.FC = () => {
                       <MenuItem value="rejected">Reject Report</MenuItem>
                     </Select>
                   </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth margin="normal">
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
+                  <FormControl fullWidth margin="normal" sx={{ m: 0 }}>
                     <InputLabel>Action to Take</InputLabel>
                     <Select
                       value={actionTaken}
@@ -487,8 +503,8 @@ const AdminReportManagement: React.FC = () => {
                       <MenuItem value="deleted">Delete/Deactivate Entity</MenuItem>
                     </Select>
                   </FormControl>
-                </Grid>
-                <Grid item xs={12}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
                   <TextField
                     fullWidth
                     multiline
@@ -497,9 +513,10 @@ const AdminReportManagement: React.FC = () => {
                     label="Admin Notes"
                     value={adminNotes}
                     onChange={(e) => setAdminNotes(e.target.value)}
+                    sx={{ m: 0 }}
                   />
-                </Grid>
-              </Grid>
+                </Box>
+              </Box>
             </Box>
           )}
         </DialogContent>

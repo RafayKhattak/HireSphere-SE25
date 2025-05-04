@@ -140,7 +140,7 @@ const UserProfile: React.FC = () => {
     // Determine display name based on user type
     const displayName = user.type === 'employer' 
         ? user.name || user.email.split('@')[0]
-        : `${user.firstName || ''} ${user.lastName || ''}`;
+        : user.type === 'admin' ? 'Admin' : `${user.firstName || ''} ${user.lastName || ''}`;
 
     return (
         <Container maxWidth="md" sx={{ py: 8 }}>
@@ -156,21 +156,23 @@ const UserProfile: React.FC = () => {
                         alt={displayName}
                         src={user.profileImage || ''}
                     >
-                        {user.type === 'employer' ? <PersonIcon fontSize="large" /> : <PersonIcon fontSize="large" />}
+                        {user.type === 'employer' ? <PersonIcon fontSize="large" /> : user.type === 'admin' ? <PersonIcon fontSize="large" /> : <PersonIcon fontSize="large" />}
                     </Avatar>
                     <Box>
                         <Typography variant="h4" gutterBottom>
                             {displayName}
                         </Typography>
                         <Typography variant="body1" color="text.secondary">
-                            {user.type === 'employer' ? 'Employer Account' : 'Job Seeker Account'}
+                            {user.type === 'employer' ? 'Employer Account' 
+                             : user.type === 'admin' ? 'Admin Account' 
+                             : 'Job Seeker Account'}
                         </Typography>
                     </Box>
                 </Box>
                 <Divider sx={{ mb: 3 }} />
 
                 <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                         <Typography variant="h6" gutterBottom>
                             Basic Information
                         </Typography>
@@ -180,7 +182,7 @@ const UserProfile: React.FC = () => {
                     </Grid>
 
                     {user.type === 'jobseeker' && (
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <Typography variant="h6" gutterBottom>
                                 Job Seeker Details
                             </Typography>
@@ -190,7 +192,7 @@ const UserProfile: React.FC = () => {
                     )}
 
                     {user.type === 'employer' && (
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <Typography variant="h6" gutterBottom>
                                     Company Information
@@ -219,6 +221,14 @@ const UserProfile: React.FC = () => {
                             onClick={handleEditPersonalProfile}
                         >
                             Edit Personal Profile
+                        </Button>
+                    ) : user.type === 'admin' ? (
+                        <Button 
+                            variant="contained" 
+                            color="secondary"
+                            onClick={() => navigate('/admin/dashboard')}
+                        >
+                            Admin Dashboard
                         </Button>
                     ) : (
                         <Button 

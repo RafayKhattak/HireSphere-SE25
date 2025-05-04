@@ -2,11 +2,19 @@ import React, { useState } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button,
   TextField, FormControl, InputLabel, Select, MenuItem,
-  Grid, FormHelperText, Alert, CircularProgress
+  Grid, FormHelperText, Alert, CircularProgress, Box, Typography,
+  FormControlLabel, RadioGroup, Radio
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
-import { CalendarToday, VideoCall } from '@mui/icons-material';
+
+// Correct MUI v7 Icon Imports
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import VideoCallIcon from '@mui/icons-material/VideoCall';
+
 import { interviewService } from '../services/api';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider, DateTimePicker } from '@mui/x-date-pickers';
+import { format } from 'date-fns';
 
 interface ScheduleInterviewDialogProps {
   open: boolean;
@@ -157,7 +165,7 @@ const ScheduleInterviewDialog: React.FC<ScheduleInterviewDialogProps> = ({
         )}
         
         <Grid container spacing={2} sx={{ mt: 1 }}>
-          <Grid item xs={12} md={6}>
+          <Grid component="div" sx={{ gridColumn: { xs: 'span 12', md: 'span 6' } }}>
             <TextField
               label="Date and Time"
               type="datetime-local"
@@ -173,7 +181,7 @@ const ScheduleInterviewDialog: React.FC<ScheduleInterviewDialogProps> = ({
             />
           </Grid>
           
-          <Grid item xs={12} md={6}>
+          <Grid component="div" sx={{ gridColumn: { xs: 'span 12', md: 'span 6' } }}>
             <TextField
               fullWidth
               label="Duration (minutes)"
@@ -185,7 +193,7 @@ const ScheduleInterviewDialog: React.FC<ScheduleInterviewDialogProps> = ({
             />
           </Grid>
           
-          <Grid item xs={12} md={6}>
+          <Grid component="div" sx={{ gridColumn: { xs: 'span 12', md: 'span 6' } }}>
             <FormControl fullWidth>
               <InputLabel>Location Type</InputLabel>
               <Select
@@ -200,7 +208,7 @@ const ScheduleInterviewDialog: React.FC<ScheduleInterviewDialogProps> = ({
             </FormControl>
           </Grid>
           
-          <Grid item xs={12} md={6}>
+          <Grid component="div" sx={{ gridColumn: { xs: 'span 12', md: 'span 6' } }}>
             <FormControl fullWidth>
               <InputLabel>Interview Type</InputLabel>
               <Select
@@ -218,9 +226,9 @@ const ScheduleInterviewDialog: React.FC<ScheduleInterviewDialogProps> = ({
           </Grid>
           
           {location === 'remote' && (
-            <Grid item xs={12}>
+            <Grid component="div" sx={{ gridColumn: 'span 12' }}>
               <Grid container spacing={1}>
-                <Grid item xs={12}>
+                <Grid component="div" sx={{ gridColumn: 'span 12' }}>
                   <TextField
                     fullWidth
                     label="Meeting Link"
@@ -231,10 +239,10 @@ const ScheduleInterviewDialog: React.FC<ScheduleInterviewDialogProps> = ({
                     placeholder="https://meet.google.com/xxx-xxxx-xxx"
                   />
                 </Grid>
-                <Grid item xs={12}>
+                <Grid component="div" sx={{ gridColumn: 'span 12' }}>
                   <Button
                     variant="outlined"
-                    startIcon={<VideoCall />}
+                    startIcon={<VideoCallIcon />}
                     onClick={handleGenerateGoogleMeetLink}
                     disabled={generatingLink || !scheduledDateTime}
                     sx={{ mt: 1 }}
@@ -248,7 +256,7 @@ const ScheduleInterviewDialog: React.FC<ScheduleInterviewDialogProps> = ({
           )}
           
           {location === 'onsite' && (
-            <Grid item xs={12}>
+            <Grid component="div" sx={{ gridColumn: 'span 12' }}>
               <TextField
                 fullWidth
                 label="Address"
@@ -263,7 +271,7 @@ const ScheduleInterviewDialog: React.FC<ScheduleInterviewDialogProps> = ({
             </Grid>
           )}
           
-          <Grid item xs={12}>
+          <Grid component="div" sx={{ gridColumn: 'span 12' }}>
             <TextField
               fullWidth
               label="Description & Instructions"
@@ -284,7 +292,7 @@ const ScheduleInterviewDialog: React.FC<ScheduleInterviewDialogProps> = ({
           variant="contained" 
           color="primary"
           disabled={loading}
-          startIcon={<CalendarToday />}
+          startIcon={<CalendarTodayIcon />}
         >
           {loading ? 'Scheduling...' : 'Schedule Interview'}
         </Button>

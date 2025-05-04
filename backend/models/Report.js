@@ -9,7 +9,7 @@ const ReportSchema = new Schema({
   },
   entityType: {
     type: String,
-    enum: ['job', 'user'],
+    enum: ['job', 'user', 'Job', 'User'],
     required: true
   },
   entityId: {

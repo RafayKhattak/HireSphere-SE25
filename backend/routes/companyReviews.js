@@ -4,10 +4,10 @@ const auth = require('../middleware/auth');
 const CompanyReview = require('../models/CompanyReview');
 const User = require('../models/User');
 const { body, validationResult } = require('express-validator');
-const { GoogleGenerativeAI } = require('@google/genai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Initialize Google Gemini AI for content moderation
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize Google Gemini API
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIzaSyCKDyoST4sGKHYCNoTunjhQKk6VCXcB1fk");
 const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
 /**

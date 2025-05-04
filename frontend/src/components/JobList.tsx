@@ -5,7 +5,6 @@ import {
     Card,
     CardContent,
     Typography,
-    Grid,
     Button,
     Chip,
     IconButton,
@@ -64,6 +63,7 @@ const JobList: React.FC = () => {
                 page: pagination.page,
                 limit: pagination.limit
             });
+            console.log('[JobList] fetchJobs received data. Sample (first job):', fetchedJobs[0]);
             setJobs(fetchedJobs);
             setPagination(prevPagination => ({
                 ...prevPagination,
@@ -98,34 +98,43 @@ const JobList: React.FC = () => {
             return;
         }
 
-        try {
-            const token = localStorage.getItem('token');
-            await bookmarkService.addBookmark(jobId);
-            
-            // Update the local state to reflect the bookmark change
-            setJobs(jobs.map(job => {
-                if (job._id === jobId) {
-                    const isBookmarked = job.bookmarkedBy?.includes(user.id);
-                    return {
-                        ...job,
-                        bookmarkedBy: isBookmarked
-                            ? job.bookmarkedBy.filter((id: string) => id !== user.id)
-                            : [...(job.bookmarkedBy || []), user.id]
-                    };
-                }
-                return job;
-            }));
+        const job = jobs.find(j => j._id === jobId);
+        if (!job) return; 
 
-            setSnackbar({
-                open: true,
-                message: 'Bookmark status updated',
-                severity: 'success'
-            });
+        // Use the new isBookmarked field for current state
+        const isCurrentlyBookmarked = job.isBookmarked;
+        // Optimistically toggle the isBookmarked field
+        const optimisticIsBookmarked = !isCurrentlyBookmarked; 
+
+        // Optimistic UI update using isBookmarked
+        setJobs(jobs.map(j => j._id === jobId ? { ...j, isBookmarked: optimisticIsBookmarked } : j));
+
+        try {
+            if (isCurrentlyBookmarked) {
+                console.log(`[JobList] Attempting to remove bookmark for job ${jobId}`);
+                await bookmarkService.removeBookmark(jobId);
+                setSnackbar({
+                    open: true,
+                    message: 'Bookmark removed',
+                    severity: 'success'
+                });
+            } else {
+                console.log(`[JobList] Attempting to add bookmark for job ${jobId}`);
+                await bookmarkService.addBookmark(jobId);
+                setSnackbar({
+                    open: true,
+                    message: 'Bookmark added',
+                    severity: 'success'
+                });
+            }
         } catch (err: any) {
+            console.error(`[JobList] Failed to ${isCurrentlyBookmarked ? 'remove' : 'add'} bookmark for job ${jobId}:`, err);
             setError(err.response?.data?.message || 'Failed to update bookmark');
+            // Revert optimistic update on error
+            setJobs(jobs.map(j => j._id === jobId ? { ...j, isBookmarked: isCurrentlyBookmarked } : j));
             setSnackbar({
                 open: true,
-                message: 'Failed to update bookmark',
+                message: `Failed to ${isCurrentlyBookmarked ? 'remove' : 'add'} bookmark`,
                 severity: 'error'
             });
         }
@@ -172,81 +181,79 @@ const JobList: React.FC = () => {
                 </Alert>
             ) : (
                 <>
-                    <Grid container spacing={3}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         {jobs.map((job) => (
-                            <Grid item xs={12} key={job._id}>
-                                <Card>
-                                    <CardContent>
-                                        <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                                            <Box sx={{ display: 'flex', alignItems: 'flex-start', flex: 1 }}>
-                                                <Avatar 
-                                                    src={typeof job.employer === 'object' ? job.employer.companyLogo : ''} 
-                                                    alt={typeof job.employer === 'object' ? job.employer.companyName : 'Company Logo'}
-                                                    sx={{ width: 60, height: 60, mr: 2, mt: 0.5 }}
+                            <Card key={job._id}>
+                                <CardContent>
+                                    <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                                        <Box sx={{ display: 'flex', alignItems: 'flex-start', flex: 1 }}>
+                                            <Avatar 
+                                                src={typeof job.employer === 'object' ? job.employer.companyLogo : ''} 
+                                                alt={typeof job.employer === 'object' ? job.employer.companyName : 'Company Logo'}
+                                                sx={{ width: 60, height: 60, mr: 2, mt: 0.5 }}
+                                            >
+                                                {(typeof job.employer === 'object' && job.employer.companyName) ? 
+                                                    job.employer.companyName.charAt(0).toUpperCase() : 'C'}
+                                            </Avatar>
+                                            <Box flex={1}>
+                                                <Typography variant="h6" component="h2" gutterBottom>
+                                                    {job.title}
+                                                </Typography>
+                                                <Typography 
+                                                    color="primary" 
+                                                    gutterBottom 
+                                                    fontWeight="500" 
+                                                    sx={{ cursor: 'pointer', textDecoration: 'none' }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (typeof job.employer === 'object' && job.employer._id) {
+                                                            navigate(`/company/${job.employer._id}`);
+                                                        }
+                                                    }}
                                                 >
-                                                    {(typeof job.employer === 'object' && job.employer.companyName) ? 
-                                                        job.employer.companyName.charAt(0).toUpperCase() : 'C'}
-                                                </Avatar>
-                                                <Box flex={1}>
-                                                    <Typography variant="h6" component="h2" gutterBottom>
-                                                        {job.title}
-                                                    </Typography>
-                                                    <Typography 
-                                                        color="primary" 
-                                                        gutterBottom 
-                                                        fontWeight="500" 
-                                                        sx={{ cursor: 'pointer', textDecoration: 'none' }}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            if (typeof job.employer === 'object' && job.employer._id) {
-                                                                navigate(`/company/${job.employer._id}`);
-                                                            }
-                                                        }}
-                                                    >
-                                                        {typeof job.employer === 'object' ? job.employer.companyName : 'Company Name'}
-                                                    </Typography>
-                                                    <Typography variant="body2" color="textSecondary" paragraph>
-                                                        {job.location} • {job.type.charAt(0).toUpperCase() + job.type.slice(1)}
-                                                    </Typography>
-                                                    <Typography variant="body2" paragraph>
-                                                        {job.description.length > 150 ? 
-                                                            `${job.description.substring(0, 150)}...` : 
-                                                            job.description}
-                                                    </Typography>
-                                                    <Box display="flex" gap={1} mb={2}>
-                                                        <Chip
-                                                            label={formatSalary(job.salary?.min, job.salary?.max, job.salary?.currency)}
-                                                            color="primary"
-                                                            variant="outlined"
-                                                        />
-                                                    </Box>
-                                                    <Button
+                                                    {typeof job.employer === 'object' ? job.employer.companyName : 'Company Name'}
+                                                </Typography>
+                                                <Typography variant="body2" color="textSecondary" paragraph>
+                                                    {job.location} • {job.type.charAt(0).toUpperCase() + job.type.slice(1)}
+                                                </Typography>
+                                                <Typography variant="body2" paragraph>
+                                                    {job.description.length > 150 ? 
+                                                        `${job.description.substring(0, 150)}...` : 
+                                                        job.description}
+                                                </Typography>
+                                                <Box display="flex" gap={1} mb={2}>
+                                                    <Chip
+                                                        label={formatSalary(job.salary?.min, job.salary?.max, job.salary?.currency)}
+                                                        color="primary"
                                                         variant="outlined"
-                                                        size="small"
-                                                        onClick={() => navigate(`/jobs/${job._id}`)}
-                                                    >
-                                                        View Details
-                                                    </Button>
+                                                    />
                                                 </Box>
-                                            </Box>
-                                            {user?.type === 'jobseeker' && (
-                                                <IconButton
-                                                    onClick={() => handleBookmark(job._id)}
-                                                    color="primary"
+                                                <Button
+                                                    variant="outlined"
+                                                    size="small"
+                                                    onClick={() => navigate(`/jobs/${job._id}`)}
                                                 >
-                                                    {job.bookmarkedBy?.includes(user.id) ? (
-                                                        <BookmarkIcon />
-                                                    ) : (
-                                                        <BookmarkBorderIcon />
-                                                    )}
-                                                </IconButton>
-                                            )}
+                                                    View Details
+                                                </Button>
+                                            </Box>
                                         </Box>
-                                    </CardContent>
-                                </Card>
-                            </Grid>
+                                        {user?.type === 'jobseeker' && (
+                                            <IconButton
+                                                onClick={() => handleBookmark(job._id)}
+                                                color="primary"
+                                            >
+                                                {job.isBookmarked ? (
+                                                    <BookmarkIcon />
+                                                ) : (
+                                                    <BookmarkBorderIcon />
+                                                )}
+                                            </IconButton>
+                                        )}
+                                    </Box>
+                                </CardContent>
+                            </Card>
                         ))}
-                    </Grid>
+                    </Box>
 
                     {pagination.pages > 1 && (
                         <Box display="flex" justifyContent="center" mt={4} mb={2}>

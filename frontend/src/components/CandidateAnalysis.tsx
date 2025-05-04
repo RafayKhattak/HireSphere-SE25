@@ -10,13 +10,12 @@ import {
   CircularProgress,
   Divider,
   Chip,
-  Grid,
-  Alert,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
-  LinearProgress
+  LinearProgress,
+  Alert
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
@@ -104,18 +103,18 @@ const CandidateAnalysis: React.FC<CandidateAnalysisProps> = ({ jobId, applicatio
     return '#f44336';
   };
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        <Typography variant="h5">AI-Based Candidate Analysis</Typography>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
+      <DialogTitle sx={{ borderBottom: 1, borderColor: 'divider', pb: 2 }}>
+        Candidate Analysis: {loading ? '...' : (analysis ? analysis.candidate.name : 'N/A')}
       </DialogTitle>
-      <DialogContent dividers>
+      <DialogContent sx={{ pt: 3 }}>
         {loading ? (
-          <Box display="flex" flexDirection="column" alignItems="center" p={3}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
             <CircularProgress />
-            <Typography variant="body1" sx={{ mt: 2 }}>
-              Analyzing candidate data...
-            </Typography>
+            <Typography sx={{ ml: 2 }}>Loading analysis...</Typography>
           </Box>
         ) : error ? (
           <Alert severity="error">{error}</Alert>
@@ -162,8 +161,8 @@ const CandidateAnalysis: React.FC<CandidateAnalysisProps> = ({ jobId, applicatio
                 />
               </Box>
 
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1) }}>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
                   <Typography variant="subtitle2" gutterBottom>Matched Skills</Typography>
                   <List dense>
                     {analysis.skillAnalysis.matchedSkills.map((skill, index) => (
@@ -175,8 +174,8 @@ const CandidateAnalysis: React.FC<CandidateAnalysisProps> = ({ jobId, applicatio
                       </ListItem>
                     ))}
                   </List>
-                </Grid>
-                <Grid item xs={12} md={6}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
                   <Typography variant="subtitle2" gutterBottom>Missing Skills</Typography>
                   <List dense>
                     {analysis.skillAnalysis.missingSkills.map((skill, index) => (
@@ -188,8 +187,8 @@ const CandidateAnalysis: React.FC<CandidateAnalysisProps> = ({ jobId, applicatio
                       </ListItem>
                     ))}
                   </List>
-                </Grid>
-              </Grid>
+                </Box>
+              </Box>
             </Box>
 
             <Divider sx={{ mb: 3 }} />
@@ -312,14 +311,14 @@ const CandidateAnalysis: React.FC<CandidateAnalysisProps> = ({ jobId, applicatio
                 />
               </Box>
 
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1) }}>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
                   <Typography variant="body2" gutterBottom>Tone: <strong>{analysis.coverLetterAnalysis.tone}</strong></Typography>
-                </Grid>
-                <Grid item xs={12} md={6}>
+                </Box>
+                <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', md: '50%' } }}>
                   <Typography variant="body2" gutterBottom>Clarity: <strong>{analysis.coverLetterAnalysis.clarity}</strong></Typography>
-                </Grid>
-              </Grid>
+                </Box>
+              </Box>
 
               <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>Key Phrases Identified</Typography>
               <Box>

@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, Link as RouterLink, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
   Container, 
   Typography, 
   Box, 
-  Grid, 
+  Grid,
   Card, 
   CardContent, 
   Divider, 
@@ -39,25 +39,24 @@ import {
   Tooltip,
   Pagination
 } from '@mui/material';
-import { 
-  Business, 
-  LocationOn, 
-  Language, 
-  Facebook, 
-  Twitter, 
-  LinkedIn,
-  CalendarToday,
-  Group,
-  Category,
-  Work,
-  Star,
-  StarBorder,
-  ThumbUp,
-  ThumbDown,
-  FilterList,
-  Sort
-} from '@mui/icons-material';
+import Business from '@mui/icons-material/Business'; 
+import LocationOn from '@mui/icons-material/LocationOn'; 
+import Language from '@mui/icons-material/Language'; 
+import Facebook from '@mui/icons-material/Facebook'; 
+import Twitter from '@mui/icons-material/Twitter'; 
+import LinkedIn from '@mui/icons-material/LinkedIn';
+import CalendarToday from '@mui/icons-material/CalendarToday';
+import Group from '@mui/icons-material/Group';
+import Category from '@mui/icons-material/Category';
+import Work from '@mui/icons-material/Work';
+import Star from '@mui/icons-material/Star';
+import StarBorder from '@mui/icons-material/StarBorder';
+import ThumbUp from '@mui/icons-material/ThumbUp';
+import ThumbDown from '@mui/icons-material/ThumbDown';
+import FilterList from '@mui/icons-material/FilterList';
+import Sort from '@mui/icons-material/Sort';
 import { useAuth } from '../context/AuthContext';
+import { companyService, jobService, reviewService } from '../services/api';
 
 // Types
 interface CompanyData {
@@ -169,6 +168,10 @@ const CompanyProfile: React.FC = () => {
   const [reviewsSort, setReviewsSort] = useState('recent');
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
 
+  // Add new state for reviews loading/error independent of main loading
+  const [reviewsLoading, setReviewsLoading] = useState<boolean>(false);
+  const [reviewsError, setReviewsError] = useState<string | null>(null);
+
   // New review form state
   const [reviewRating, setReviewRating] = useState<number>(0);
   const [reviewTitle, setReviewTitle] = useState('');
@@ -190,60 +193,67 @@ const CompanyProfile: React.FC = () => {
   const [management, setManagement] = useState<number | null>(null);
   const [cultureValues, setCultureValues] = useState<number | null>(null);
 
-  // Fetch company data
-  useEffect(() => {
-    const fetchCompanyData = async () => {
-      try {
-        setLoading(true);
-        // Fetch company profile
-        const { data } = await axios.get(`/api/employer/${employerId}/public`);
-        setCompany(data);
-        
-        // Fetch company jobs
-        const jobsResponse = await axios.get(`/api/jobs?employer=${employerId}&status=open`);
-        setJobs(jobsResponse.data.jobs);
-        
-        // Fetch company reviews with initial pagination
-        fetchCompanyReviews(1, reviewsSort);
-        
-        setError(null);
-      } catch (err: any) {
-        console.error('Error fetching company data:', err);
-        setError(err.response?.data?.message || 'Could not load company data');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchCompanyData = useCallback(async () => {
+    if (!employerId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // Use companyService.getCompanyProfile
+      const profileRes = await companyService.getCompanyProfile(employerId);
+      setCompany(profileRes.data);
 
-    if (employerId) {
-      fetchCompanyData();
+      // Use companyService.getCompanyJobs
+      const jobsRes = await companyService.getCompanyJobs(employerId);
+      setJobs(jobsRes.data);
+
+      // Use companyService.getCompanyReviews
+      const reviewsRes = await companyService.getCompanyReviews(employerId);
+      setReviews(reviewsRes.data.reviews);
+      setRatings(reviewsRes.data.ratings);
+
+    } catch (err: any) {
+      console.error('Error fetching company data:', err);
+      setError(err.response?.data?.message || 'Failed to load company data');
+    } finally {
+      setLoading(false);
     }
   }, [employerId]);
 
-  // Fetch company reviews with pagination and sorting
-  const fetchCompanyReviews = async (page: number, sort: string) => {
+  // Define fetchReviews function
+  const fetchReviews = useCallback(async (page: number, sort: string) => {
+    if (!employerId) return;
+    setReviewsLoading(true);
+    setReviewsError(null);
     try {
-      const { data } = await axios.get(`/api/company-reviews/${employerId}?page=${page}&limit=5&sort=${sort}`);
-      setReviews(data.reviews);
-      setRatings(data.ratings);
-      setPagination(data.pagination);
-      setReviewsPage(page);
-      setReviewsSort(sort);
+      // Use companyService.getCompanyReviews with page and sort parameters
+      const reviewsRes = await companyService.getCompanyReviews(employerId, { page, sort });
+      setReviews(reviewsRes.data.reviews);
+      setRatings(reviewsRes.data.ratings);
+      setPagination(reviewsRes.data.pagination);
+      setReviewsPage(page); // Update the current page state
+      setReviewsSort(sort); // Update the current sort state
     } catch (err: any) {
       console.error('Error fetching company reviews:', err);
+      setReviewsError(err.response?.data?.message || 'Failed to load reviews');
+    } finally {
+      setReviewsLoading(false);
     }
-  };
+  }, [employerId]);
+
+  useEffect(() => {
+    fetchCompanyData();
+  }, [fetchCompanyData]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
-    fetchCompanyReviews(value, reviewsSort);
+    fetchReviews(value, reviewsSort);
   };
 
   const handleSortChange = (sort: string) => {
-    fetchCompanyReviews(1, sort);
+    fetchReviews(1, sort);
   };
 
   const handleReviewDialogOpen = () => {
@@ -285,6 +295,7 @@ const CompanyProfile: React.FC = () => {
   };
 
   const handleReviewSubmit = async () => {
+    if (!employerId || !user) return;
     // Validate form
     if (reviewRating === 0) {
       setFormError('Please provide an overall rating');
@@ -301,12 +312,10 @@ const CompanyProfile: React.FC = () => {
       return;
     }
     
+    setSubmitting(true);
+    setFormError(null);
+    
     try {
-      setSubmitting(true);
-      setFormError(null);
-      
-      const token = localStorage.getItem('token');
-      
       const reviewData = {
         rating: reviewRating,
         title: reviewTitle,
@@ -327,16 +336,12 @@ const CompanyProfile: React.FC = () => {
         }
       };
       
-      await axios.post(`/api/company-reviews/${employerId}`, reviewData, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      // Use reviewService.submitReview
+      await reviewService.submitReview(employerId, reviewData);
       
       // Close dialog and refresh reviews
       handleReviewDialogClose();
-      fetchCompanyReviews(1, reviewsSort);
+      fetchCompanyData();
       
     } catch (err: any) {
       console.error('Error submitting review:', err);
@@ -370,8 +375,8 @@ const CompanyProfile: React.FC = () => {
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Company Header */}
       <Paper elevation={2} sx={{ p: 3, mb: 4, borderRadius: 2 }}>
-        <Grid container spacing={3} alignItems="center">
-          <Grid item xs={12} sm={2} sx={{ display: 'flex', justifyContent: 'center' }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', margin: theme => theme.spacing(-1.5) }}>
+          <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: 'calc(100% / 6)' }, display: 'flex', justifyContent: 'center' }}>
             <Avatar
               src={company.companyLogo}
               alt={company.companyName}
@@ -383,9 +388,9 @@ const CompanyProfile: React.FC = () => {
             >
               {!company.companyLogo && company.companyName.charAt(0)}
             </Avatar>
-          </Grid>
+          </Box>
           
-          <Grid item xs={12} sm={10}>
+          <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', sm: 'calc(100% * 5 / 6)' } }}>
             <Typography variant="h4" component="h1" gutterBottom>
               {company.companyName}
             </Typography>
@@ -493,8 +498,8 @@ const CompanyProfile: React.FC = () => {
                 </IconButton>
               )}
             </Box>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </Paper>
       
       {/* Tabs Navigation */}
@@ -541,8 +546,8 @@ const CompanyProfile: React.FC = () => {
         
         {/* Ratings Summary */}
         {ratings && ratings.totalReviews > 0 ? (
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12} md={4}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5), mb: 4 }}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: 'calc(100% / 3)' } }}>
               <Paper elevation={1} sx={{ p: 2, textAlign: 'center', height: '100%' }}>
                 <Typography variant="h2" color="primary">
                   {ratings.averageRating.toFixed(1)}
@@ -558,11 +563,11 @@ const CompanyProfile: React.FC = () => {
                   Based on {ratings.totalReviews} reviews
                 </Typography>
               </Paper>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={8}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: 'calc(100% * 2 / 3)' } }}>
               <Paper elevation={1} sx={{ p: 2 }}>
-                <Typography variant="subtitle1" gutterBottom>Rating Breakdown</Typography>
+                <Typography variant="subtitle1" gutterBottom>Ratings Breakdown</Typography>
                 
                 <Box sx={{ mb: 1 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
@@ -624,8 +629,8 @@ const CompanyProfile: React.FC = () => {
                   />
                 </Box>
               </Paper>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         ) : (
           <Alert severity="info" sx={{ mb: 4 }}>
             No reviews yet. Be the first to review {company.companyName}!
@@ -670,12 +675,16 @@ const CompanyProfile: React.FC = () => {
                 >
                   <ListItemText
                     primary={
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-                        <Typography variant="subtitle1" component="h3" fontWeight="bold">
-                          {review.title}
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Rating value={review.rating} readOnly size="small" />
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', margin: theme => theme.spacing(-0.5), mb: 1 }}>
+                        <Box sx={{ padding: theme => theme.spacing(0.5), width: { xs: '100%', sm: 'calc(100% * 2 / 3)' } }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Rating value={review.rating} readOnly size="small" />
+                          </Box>
+                        </Box>
+                        <Box sx={{ padding: theme => theme.spacing(0.5), width: { xs: '100%', sm: 'calc(100% * 1 / 3)' }, textAlign: { xs: 'left', sm: 'right' } }}>
+                          <Typography variant="caption" color="text.secondary">
+                            {new Date(review.createdAt).toLocaleDateString()}
+                          </Typography>
                         </Box>
                       </Box>
                     }
@@ -690,9 +699,9 @@ const CompanyProfile: React.FC = () => {
                         </Typography>
                         
                         {(review.pros || review.cons) && (
-                          <Grid container spacing={2} sx={{ mt: 1 }}>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1), mt: 1 }}>
                             {review.pros && (
-                              <Grid item xs={12} sm={6}>
+                              <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
                                 <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
                                   <ThumbUp color="success" sx={{ mr: 1, fontSize: 18 }} />
                                   <Box>
@@ -700,10 +709,10 @@ const CompanyProfile: React.FC = () => {
                                     <Typography variant="body2">{review.pros}</Typography>
                                   </Box>
                                 </Box>
-                              </Grid>
+                              </Box>
                             )}
                             {review.cons && (
-                              <Grid item xs={12} sm={6}>
+                              <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
                                 <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
                                   <ThumbDown color="error" sx={{ mr: 1, fontSize: 18 }} />
                                   <Box>
@@ -711,9 +720,9 @@ const CompanyProfile: React.FC = () => {
                                     <Typography variant="body2">{review.cons}</Typography>
                                   </Box>
                                 </Box>
-                              </Grid>
+                              </Box>
                             )}
-                          </Grid>
+                          </Box>
                         )}
                         
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
@@ -796,9 +805,9 @@ const CompanyProfile: React.FC = () => {
         </Box>
         
         {jobs.length > 0 ? (
-          <Grid container spacing={2}>
+          <Box>
             {jobs.map((job) => (
-              <Grid item xs={12} key={job._id}>
+              <Box key={job._id} sx={{ mb: 2 }}>
                 <Paper 
                   elevation={1} 
                   sx={{ 
@@ -843,9 +852,9 @@ const CompanyProfile: React.FC = () => {
                     </Button>
                   </Box>
                 </Paper>
-              </Grid>
+              </Box>
             ))}
-          </Grid>
+          </Box>
         ) : (
           <Alert severity="info">No open positions available at the moment.</Alert>
         )}
@@ -870,8 +879,8 @@ const CompanyProfile: React.FC = () => {
             <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>
           )}
           
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <Typography gutterBottom>Overall Rating*</Typography>
               <Rating
                 name="overall-rating"
@@ -882,9 +891,9 @@ const CompanyProfile: React.FC = () => {
                 size="large"
                 sx={{ mb: 1 }}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <TextField
                 label="Review Title*"
                 fullWidth
@@ -894,9 +903,9 @@ const CompanyProfile: React.FC = () => {
                 helperText={`${reviewTitle.length}/100 characters`}
                 required
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <TextField
                 label="Your Review*"
                 fullWidth
@@ -908,9 +917,9 @@ const CompanyProfile: React.FC = () => {
                 helperText={`${reviewText.length}/2000 characters - What did you like or dislike about working here?`}
                 required
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Pros"
                 fullWidth
@@ -921,9 +930,9 @@ const CompanyProfile: React.FC = () => {
                 inputProps={{ maxLength: 1000 }}
                 helperText={`${reviewPros.length}/1000 characters - Best parts of working here`}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Cons"
                 fullWidth
@@ -934,18 +943,18 @@ const CompanyProfile: React.FC = () => {
                 inputProps={{ maxLength: 1000 }}
                 helperText={`${reviewCons.length}/1000 characters - Areas for improvement`}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Job Title"
                 fullWidth
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <FormControl fullWidth>
                 <InputLabel>Employment Status</InputLabel>
                 <Select
@@ -961,9 +970,9 @@ const CompanyProfile: React.FC = () => {
                   <MenuItem value="prefer-not-to-say">Prefer not to say</MenuItem>
                 </Select>
               </FormControl>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Employment Duration"
                 fullWidth
@@ -971,9 +980,9 @@ const CompanyProfile: React.FC = () => {
                 value={workDuration}
                 onChange={(e) => setWorkDuration(e.target.value)}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <FormControlLabel
                 control={
                   <Checkbox 
@@ -983,16 +992,16 @@ const CompanyProfile: React.FC = () => {
                 }
                 label="I currently work here"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <Divider />
               <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>
                 Category Ratings (Optional)
               </Typography>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <Typography variant="body2" gutterBottom>
                 Work-Life Balance
               </Typography>
@@ -1003,9 +1012,9 @@ const CompanyProfile: React.FC = () => {
                   setWorkLifeBalance(newValue);
                 }}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <Typography variant="body2" gutterBottom>
                 Compensation & Benefits
               </Typography>
@@ -1016,9 +1025,9 @@ const CompanyProfile: React.FC = () => {
                   setCompensation(newValue);
                 }}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <Typography variant="body2" gutterBottom>
                 Job Security
               </Typography>
@@ -1029,9 +1038,9 @@ const CompanyProfile: React.FC = () => {
                   setJobSecurity(newValue);
                 }}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <Typography variant="body2" gutterBottom>
                 Management
               </Typography>
@@ -1042,9 +1051,9 @@ const CompanyProfile: React.FC = () => {
                   setManagement(newValue);
                 }}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <Typography variant="body2" gutterBottom>
                 Culture & Values
               </Typography>
@@ -1055,9 +1064,9 @@ const CompanyProfile: React.FC = () => {
                   setCultureValues(newValue);
                 }}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <Divider />
               <FormControlLabel
                 control={
@@ -1068,8 +1077,8 @@ const CompanyProfile: React.FC = () => {
                 }
                 label="Post anonymously"
               />
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </DialogContent>
         
         <DialogActions>

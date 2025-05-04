@@ -37,6 +37,10 @@ import SalaryInsights from './components/SalaryInsights';
 import CompanyProfile from './components/CompanyProfile';
 import EmployerInterviews from './components/EmployerInterviews';
 import JobSeekerInterviews from './components/JobSeekerInterviews';
+import MyApplications from './components/MyApplications';
+import AdminRegistration from './components/AdminRegistration';
+import AdminReportManagement from './components/AdminReportManagement';
+import AdminDashboard from './components/AdminDashboard';
 
 const theme = createTheme({
     palette: {
@@ -335,11 +339,11 @@ const App: React.FC = () => {
                             }
                         />
                         <Route
-                            path="/jobseeker/applications"
+                            path="/applications"
                             element={
                                 <PrivateRoute allowedUserTypes={['jobseeker']}>
                                     <Layout>
-                                        <ApplicationTracking />
+                                        <MyApplications />
                                     </Layout>
                                 </PrivateRoute>
                             }
@@ -382,6 +386,36 @@ const App: React.FC = () => {
                                 <Layout>
                                     <CompanyProfile />
                                 </Layout>
+                            }
+                        />
+                        
+                        {/* Admin Routes */}
+                        <Route
+                            path="/admin/register"
+                            element={
+                                <Layout>
+                                    <AdminRegistration />
+                                </Layout>
+                            }
+                        />
+                        <Route
+                            path="/admin/reports"
+                            element={
+                                <PrivateRoute allowedUserTypes={['admin']}>
+                                    <Layout>
+                                        <AdminReportManagement />
+                                    </Layout>
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/admin/dashboard"
+                            element={
+                                <PrivateRoute allowedUserTypes={['admin']}>
+                                    <Layout>
+                                        <AdminDashboard />
+                                    </Layout>
+                                </PrivateRoute>
                             }
                         />
                     </Routes>

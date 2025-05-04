@@ -9,8 +9,9 @@ import {
     Typography,
     Paper,
     Alert,
-    Grid,
-    CircularProgress
+    CircularProgress,
+    Container,
+    Divider
 } from '@mui/material';
 import { jobService, applicationService } from '../services/api';
 import { Job } from '../types';
@@ -30,6 +31,7 @@ const JobApplicationForm: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string>('');
     const [job, setJob] = useState<Job | null>(null);
 
@@ -58,11 +60,14 @@ const JobApplicationForm: React.FC = () => {
         validationSchema: validationSchema,
         onSubmit: async (values) => {
             if (!id) return;
+            setError('');
+            setIsSubmitting(true);
             try {
                 await applicationService.applyForJob(id, values);
                 navigate(`/jobs/${id}`);
             } catch (err: any) {
                 setError(err.response?.data?.message || 'Failed to submit application');
+                setIsSubmitting(false);
             }
         },
     });
@@ -84,14 +89,7 @@ const JobApplicationForm: React.FC = () => {
     }
 
     return (
-        <Box
-            sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                minHeight: 'calc(100vh - 200px)',
-            }}
-        >
+        <Container maxWidth="md" sx={{ mt: 4, mb: 8 }}>
             <Paper
                 elevation={3}
                 sx={{
@@ -112,22 +110,25 @@ const JobApplicationForm: React.FC = () => {
                     </Alert>
                 )}
                 <form onSubmit={formik.handleSubmit}>
-                    <Grid container spacing={2}>
-                        <Grid item xs={12}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <Box>
                             <TextField
                                 fullWidth
                                 id="coverLetter"
                                 name="coverLetter"
                                 label="Cover Letter"
                                 multiline
-                                rows={6}
+                                rows={8}
                                 value={formik.values.coverLetter}
                                 onChange={formik.handleChange}
                                 error={formik.touched.coverLetter && Boolean(formik.errors.coverLetter)}
                                 helperText={formik.touched.coverLetter && formik.errors.coverLetter}
                             />
-                        </Grid>
-                        <Grid item xs={12}>
+                        </Box>
+                        <Box>
+                            <Typography variant="subtitle1" gutterBottom>
+                                Resume URL
+                            </Typography>
                             <TextField
                                 fullWidth
                                 id="resume"
@@ -138,15 +139,17 @@ const JobApplicationForm: React.FC = () => {
                                 error={formik.touched.resume && Boolean(formik.errors.resume)}
                                 helperText={formik.touched.resume && formik.errors.resume}
                             />
-                        </Grid>
-                    </Grid>
+                        </Box>
+                    </Box>
 
                     <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
                         <Button
                             type="submit"
                             variant="contained"
                             sx={{ flex: 1 }}
+                            disabled={isSubmitting}
                         >
+                            {isSubmitting ? <CircularProgress size={24} sx={{ mr: 1 }} /> : null}
                             Submit Application
                         </Button>
                         <Button
@@ -159,7 +162,7 @@ const JobApplicationForm: React.FC = () => {
                     </Box>
                 </form>
             </Paper>
-        </Box>
+        </Container>
     );
 };
 

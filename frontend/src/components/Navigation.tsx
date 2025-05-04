@@ -22,18 +22,18 @@ import {
     Divider,
     Link
 } from '@mui/material';
-import {
-    Menu as MenuIcon,
-    Work as WorkIcon,
-    Person as PersonIcon,
-    Business as BusinessIcon,
-    Bookmark as BookmarkIcon,
-    ExitToApp as LogoutIcon,
-    Info as InfoIcon,
-    Assessment as AssessmentIcon,
-    MonetizationOn as MoneyIcon,
-    VideoCameraFront as VideoIcon
-} from '@mui/icons-material';
+import MenuIcon from '@mui/icons-material/Menu';
+import WorkIcon from '@mui/icons-material/Work';
+import PersonIcon from '@mui/icons-material/Person';
+import BusinessIcon from '@mui/icons-material/Business';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
+import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+import InfoIcon from '@mui/icons-material/Info';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
+import VideoCameraFrontIcon from '@mui/icons-material/VideoCameraFront';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import ReportIcon from '@mui/icons-material/Report';
 import { useAuth } from '../context/AuthContext';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -91,9 +91,9 @@ const Navigation: React.FC = () => {
             { text: 'Recommendations', icon: <WorkIcon />, path: '/recommendations' },
             { text: 'Job Alerts', icon: <WorkIcon />, path: '/job-alerts' },
             { text: 'Skill Assessments', icon: <AssessmentIcon />, path: '/assessments' },
-            { text: 'Salary Insights', icon: <MoneyIcon />, path: '/jobseeker/salary-insights' },
+            { text: 'Salary Insights', icon: <MonetizationOnIcon />, path: '/jobseeker/salary-insights' },
             { text: 'My Applications', icon: <PersonIcon />, path: '/applications' },
-            { text: 'My Interviews', icon: <VideoIcon />, path: '/jobseeker/interviews' },
+            { text: 'My Interviews', icon: <VideoCameraFrontIcon />, path: '/jobseeker/interviews' },
             { text: 'Bookmarks', icon: <BookmarkIcon />, path: '/jobs/bookmarks' },
             { text: 'Messages', icon: <PersonIcon />, path: '/messages' }
         ] : []),
@@ -101,9 +101,13 @@ const Navigation: React.FC = () => {
             { text: 'Company Profile', icon: <BusinessIcon />, path: '/employer/profile' },
             { text: 'Post Job', icon: <WorkIcon />, path: '/jobs/post' },
             { text: 'Manage Jobs', icon: <WorkIcon />, path: '/jobs/manage' },
-            { text: 'Manage Interviews', icon: <VideoIcon />, path: '/employer/interviews' },
+            { text: 'Manage Interviews', icon: <VideoCameraFrontIcon />, path: '/employer/interviews' },
             { text: 'Find Candidates', icon: <PersonIcon />, path: '/employer/candidates' },
             { text: 'Messages', icon: <PersonIcon />, path: '/messages' }
+        ] : []),
+        ...(user?.type === 'admin' ? [
+            { text: 'Manage Reports', icon: <ReportIcon />, path: '/admin/reports' },
+            { text: 'Admin Dashboard', icon: <AdminPanelSettingsIcon />, path: '/admin/dashboard' }
         ] : [])
     ] : [
         { text: 'About Us', icon: <InfoIcon />, path: '/about' }
@@ -128,7 +132,7 @@ const Navigation: React.FC = () => {
                 ))}
                 {isAuthenticated && (
                     <ListItemButton onClick={handleLogout}>
-                        <ListItemIcon><LogoutIcon /></ListItemIcon>
+                        <ListItemIcon><ExitToAppIcon /></ListItemIcon>
                         <ListItemText primary="Logout" />
                     </ListItemButton>
                 )}

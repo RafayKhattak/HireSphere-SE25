@@ -6,6 +6,11 @@ const jobAlertSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+    name: {
+        type: String,
+        trim: true,
+        default: 'Unnamed Alert'
+    },
     keywords: [{
         type: String,
         trim: true
@@ -23,7 +28,7 @@ const jobAlertSchema = new mongoose.Schema({
         max: Number,
         currency: {
             type: String,
-            default: 'USD'
+            default: 'PKR'
         }
     },
     frequency: {

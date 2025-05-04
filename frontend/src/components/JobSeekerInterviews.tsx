@@ -1,17 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Card, CardContent, CardActions, Button, Chip,
-  Grid, Divider, CircularProgress, Alert, Dialog, DialogTitle,
+  CircularProgress, Alert, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, Accordion, AccordionSummary,
-  AccordionDetails
+  AccordionDetails, Container, IconButton, Divider
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { 
-  Event, LocationOn, AccessTime, Cancel, ExpandMore, 
-  VideoCall, Phone, Business, Email 
-} from '@mui/icons-material';
+
+// Correct MUI v7 Icon Imports
+import EventIcon from '@mui/icons-material/Event';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import CancelIcon from '@mui/icons-material/Cancel';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import VideoCallIcon from '@mui/icons-material/VideoCall';
+import PhoneIcon from '@mui/icons-material/Phone';
+import BusinessIcon from '@mui/icons-material/Business';
+import EmailIcon from '@mui/icons-material/Email';
+
 import { interviewService } from '../services/api';
+import { format } from 'date-fns';
 
 interface Interview {
   _id: string;
@@ -53,17 +62,9 @@ const JobSeekerInterviews: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState<boolean>(false);
   const [selectedInterviewId, setSelectedInterviewId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!user || user.type !== 'jobseeker') {
-      navigate('/login');
-      return;
-    }
-    
-    fetchInterviews();
-  }, [user]);
-
-  const fetchInterviews = async () => {
+  const fetchInterviews = useCallback(async () => {
     setLoading(true);
     setError(null);
     
@@ -76,29 +77,31 @@ const JobSeekerInterviews: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleCancelInterview = async () => {
-    if (!selectedInterviewId) return;
+  useEffect(() => {
+    if (!user || user.type !== 'jobseeker') {
+      navigate('/login');
+      return;
+    }
     
-    try {
-      await interviewService.cancelInterview(selectedInterviewId);
-      
-      // Update the interview in the state
-      setInterviews(interviews.map(interview => 
-        interview._id === selectedInterviewId 
-          ? { ...interview, status: 'cancelled' } 
-          : interview
-      ));
-      
-      setSuccessMessage('Interview cancelled successfully');
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err: any) {
-      console.error('Error cancelling interview:', err);
-      setError(err.response?.data?.message || 'Failed to cancel interview');
-    } finally {
-      setCancelDialogOpen(false);
-      setSelectedInterviewId(null);
+    fetchInterviews();
+  }, [user]);
+
+  const handleCancelInterview = async (interviewId: string) => {
+    if (window.confirm('Are you sure you want to request cancellation for this interview?')) {
+      setCancellingId(interviewId);
+      try {
+        await interviewService.cancelInterview(interviewId);
+        fetchInterviews();
+        setSuccessMessage('Interview cancelled successfully');
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } catch (err: any) {
+        console.error('Error cancelling interview:', err);
+        setError('Failed to cancel interview. Please try again or contact the employer.');
+      } finally {
+        setCancellingId(null);
+      }
     }
   };
 
@@ -150,8 +153,8 @@ const JobSeekerInterviews: React.FC = () => {
     return (
       <Card key={interview._id} sx={{ mb: 2, position: 'relative' }}>
         <CardContent>
-          <Grid container spacing={2}>
-            <Grid item xs={12}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1) }}>
+            <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                 <Typography variant="h6" component="div">
                   {interview.job.title}
@@ -164,82 +167,82 @@ const JobSeekerInterviews: React.FC = () => {
               </Box>
               <Typography color="text.secondary" gutterBottom>
                 <Link to={`/company/${interview.job.employer._id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <Business sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'text-bottom' }} />
+                  <BusinessIcon sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'text-bottom' }} />
                   {interview.job.employer.companyName || interview.job.company}
                 </Link>
               </Typography>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} sm={6}>
+            <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
               <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Event sx={{ fontSize: 16, mr: 0.5 }} />
+                <EventIcon sx={{ fontSize: 16, mr: 0.5 }} />
                 Date: {date}
               </Typography>
               <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <AccessTime sx={{ fontSize: 16, mr: 0.5 }} />
+                <AccessTimeIcon sx={{ fontSize: 16, mr: 0.5 }} />
                 Time: {time} ({interview.duration} minutes)
               </Typography>
               <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
-                <LocationOn sx={{ fontSize: 16, mr: 0.5 }} />
+                <LocationOnIcon sx={{ fontSize: 16, mr: 0.5 }} />
                 Location: {interview.location.charAt(0).toUpperCase() + interview.location.slice(1)}
                 {interview.location === 'remote' && (
-                  <VideoCall sx={{ fontSize: 16, ml: 0.5 }} />
+                  <VideoCallIcon sx={{ fontSize: 16, ml: 0.5 }} />
                 )}
                 {interview.location === 'phone' && (
-                  <Phone sx={{ fontSize: 16, ml: 0.5 }} />
+                  <PhoneIcon sx={{ fontSize: 16, ml: 0.5 }} />
                 )}
               </Typography>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} sm={6}>
+            <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
               <Typography variant="body2" sx={{ mb: 1 }}>
                 Type: {interview.interviewType.charAt(0).toUpperCase() + interview.interviewType.slice(1)} Interview
               </Typography>
               <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Email sx={{ fontSize: 16, mr: 0.5 }} />
+                <EmailIcon sx={{ fontSize: 16, mr: 0.5 }} />
                 Contact: <a href={`mailto:${interview.employer.email}`} style={{ marginLeft: 4 }}>{interview.employer.email}</a>
               </Typography>
-            </Grid>
+            </Box>
             
             {interview.description && (
-              <Grid item xs={12}>
+              <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
                 <Divider sx={{ my: 1 }} />
                 <Accordion disableGutters elevation={0} sx={{ backgroundColor: 'transparent' }}>
-                  <AccordionSummary expandIcon={<ExpandMore />}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Typography variant="body2" fontWeight="bold">Interview Details</Typography>
                   </AccordionSummary>
                   <AccordionDetails>
                     <Typography variant="body2">{interview.description}</Typography>
                   </AccordionDetails>
                 </Accordion>
-              </Grid>
+              </Box>
             )}
             
             {interview.location === 'remote' && interview.meetingLink && (
-              <Grid item xs={12}>
+              <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="body2" fontWeight="bold">Meeting Link:</Typography>
                 <Typography variant="body2">
                   <a href={interview.meetingLink} target="_blank" rel="noopener noreferrer">{interview.meetingLink}</a>
                 </Typography>
-              </Grid>
+              </Box>
             )}
             
             {interview.location === 'onsite' && interview.address && (
-              <Grid item xs={12}>
+              <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="body2" fontWeight="bold">Address:</Typography>
                 <Typography variant="body2">{interview.address}</Typography>
-              </Grid>
+              </Box>
             )}
-          </Grid>
+          </Box>
         </CardContent>
         
         <CardActions>
           {showCancelButton && (
             <Button 
               size="small" 
-              startIcon={<Cancel />} 
+              startIcon={<CancelIcon />} 
               color="error"
               onClick={() => openCancelDialog(interview._id)}
             >
@@ -353,7 +356,7 @@ const JobSeekerInterviews: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCancelDialogOpen(false)}>No, Keep It</Button>
-          <Button onClick={handleCancelInterview} color="error" autoFocus>
+          <Button onClick={() => handleCancelInterview(selectedInterviewId as string)} color="error" autoFocus>
             Yes, Cancel Interview
           </Button>
         </DialogActions>

@@ -1,518 +1,384 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateUser } = require('../middleware/auth');
+const authenticateUser = require('../middleware/auth');
 const { isEmployer } = require('../middleware/roleCheck');
 const Application = require('../models/Application');
 const Job = require('../models/Job');
 const User = require('../models/User');
-const JobSeeker = require('../models/JobSeeker');
-const { GoogleGenerativeAI } = require('@google/genai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // Initialize Google Gemini API
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCKDyoST4sGKHYCNoTunjhQKk6VCXcB1fk"; // Use const for API Key
+let geminiModel;
+try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    console.log('[Screening] Gemini AI Model initialized successfully.');
+} catch (aiError) {
+    console.error('[Screening] Failed to initialize Gemini AI Model:', aiError);
+    geminiModel = null; // Set to null if initialization fails
+}
 
 /**
- * @route   POST /api/screening/analyze-candidates/:jobId
- * @desc    Analyze candidates for a job using AI
+ * @route   GET /api/screening/test
+ * @desc    Test route for screening API
+ * @access  Public
+ */
+router.get('/test', (req, res) => {
+    console.log('[Screening] Test route accessed.');
+    res.json({ message: 'Screening API is working' });
+});
+
+/**
+ * @route   POST /api/screening/analyze/:jobId
+ * @desc    Analyze candidates for a job
  * @access  Private (Employers only)
  */
-router.post('/analyze-candidates/:jobId', authenticateUser, isEmployer, async (req, res) => {
+router.post('/analyze/:jobId', authenticateUser, isEmployer, async (req, res) => {
+    console.log(`[Screening] Received POST /analyze request for Job ID: ${req.params.jobId} from Employer ID: ${req.user.id}`);
+    console.log(`[Screening] Request body:`, req.body);
+    console.log(`[Screening] Request query params:`, req.query);
+    
+    if (!geminiModel) {
+        console.error('[Screening] AI Model not available. Cannot perform analysis.');
+        return res.status(503).json({ message: 'AI Screening service is currently unavailable.' });
+    }
+
     try {
         const jobId = req.params.jobId;
+        const useFallback = req.query.useFallback === 'true';
         
-        // Verify the job belongs to the current employer
-        const job = await Job.findById(jobId);
+        console.log(`[Screening] Finding job with ID: ${jobId}, useFallback=${useFallback}`);
+        const job = await Job.findById(jobId).lean(); // Use lean for performance
         if (!job) {
-            return res.status(404).json({ error: 'Job not found' });
+            console.log(`[Screening] Job not found: ${jobId}`);
+            return res.status(404).json({ message: 'Job not found' });
         }
+        console.log(`[Screening] Found job: "${job.title}" (${job._id})`);
         
         if (job.employer.toString() !== req.user.id) {
-            return res.status(403).json({ error: 'You are not authorized to access this job' });
+            console.log(`[Screening] Authorization failed: Employer ${req.user.id} does not own job ${jobId}`);
+            return res.status(403).json({ message: 'Not authorized to access this job' });
         }
+        console.log(`[Screening] Employer ownership verified.`);
         
-        // Get all applications for this job
+        console.log(`[Screening] Finding applications for Job ID: ${jobId}`);
         const applications = await Application.find({ job: jobId })
+            // Populate necessary fields for the prompt
             .populate({
                 path: 'jobSeeker',
-                populate: {
-                    path: 'user',
-                    select: 'name email'
-                }
+                select: 'name email skills experience education title totalYearsExperience location profileImage',
+                // Do NOT populate nested refs like experience/education here if they are embedded
+            })
+            .lean(); // Use lean as we only need plain objects
+        
+        console.log(`[Screening] Found ${applications.length} applications.`);
+        if (applications.length === 0) {
+            return res.status(200).json({ 
+                message: 'No applications found for this job.', 
+                job: { id: job._id, title: job.title },
+                candidates: [] 
+            });
+        }
+
+        // If using fallback mode, skip AI processing and use a simple algorithmic match
+        if (useFallback) {
+            console.log('[Screening] Using fallback mode (no AI) for candidate matching');
+            
+            const fallbackResults = applications.map(app => {
+                // Basic algorithm: Count matching skills and calculate percentage
+                const jobSeekerSkills = app.jobSeeker?.skills || [];
+                const jobRequiredSkills = (job.requirements || '').toLowerCase().split(/[,;\s]+/);
+                
+                // Filter out empty strings and normalize
+                const normalizedJobSkills = jobRequiredSkills.filter(s => s.trim()).map(s => s.trim().toLowerCase());
+                const normalizedSeekerSkills = jobSeekerSkills.map(s => s.toLowerCase());
+                
+                // Count matches
+                let matchCount = 0;
+                const matchedSkills = [];
+                const missingSkills = [];
+                
+                normalizedJobSkills.forEach(skill => {
+                    if (normalizedSeekerSkills.some(s => s.includes(skill) || skill.includes(s))) {
+                        matchCount++;
+                        matchedSkills.push(skill);
+                    } else {
+                        missingSkills.push(skill);
+                    }
+                });
+                
+                // Calculate match score (normalize to 0-100)
+                const rawScore = normalizedJobSkills.length > 0 
+                    ? (matchCount / normalizedJobSkills.length) * 100 
+                    : 50; // Default if no skills specified
+                
+                // Adjust based on years of experience if available
+                const expYears = app.jobSeeker?.totalYearsExperience || 0;
+                const expBonus = Math.min(expYears * 2, 15); // Up to 15% bonus for experience
+                
+                // Final score (cap at 100)
+                const matchScore = Math.min(Math.round(rawScore + expBonus), 100);
+                
+                console.log(`[Screening] Fallback match for ${app.jobSeeker?.name}: ${matchScore}% (skills: ${matchCount}/${normalizedJobSkills.length}, exp: +${expBonus}%)`);
+                
+                return {
+                    applicationId: app._id.toString(),
+                    matchScore: matchScore,
+                    strengths: matchedSkills.slice(0, 3).map(s => `Has skill in ${s}`),
+                    weaknesses: missingSkills.slice(0, 3).map(s => `Missing skill in ${s}`),
+                    reasoning: `Matched ${matchCount} skills out of ${normalizedJobSkills.length} required skills with ${expYears} years of experience.`
+                };
             });
             
-        if (applications.length === 0) {
-            return res.status(404).json({ error: 'No applications found for this job' });
-        }
-        
-        // Get detailed job seeker information for each application
-        const detailedApplications = await Promise.all(applications.map(async (application) => {
-            const jobSeeker = await JobSeeker.findById(application.jobSeeker._id);
-            return {
-                application,
-                jobSeeker
-            };
-        }));
-        
-        // Use AI to analyze applications
-        let analysisResults = [];
-        
-        try {
-            // Try to use AI for analysis
-            analysisResults = await Promise.all(detailedApplications.map(async (data) => {
-                return await analyzeWithAI(job, data.application, data.jobSeeker);
-            }));
-        } catch (error) {
-            console.error('Error using AI for analysis, falling back to standard scoring', error);
-            // Fallback to simple scoring method
-            analysisResults = detailedApplications.map((data) => {
-                return scoreApplication(job, data.application, data.jobSeeker);
+            // Sort by score and prepare final response
+            const finalFallbackResults = applications.map(app => {
+                const analysis = fallbackResults.find(res => res.applicationId === app._id.toString());
+                return {
+                    applicationId: app._id,
+                    candidate: {
+                        id: app.jobSeeker?._id,
+                        name: app.jobSeeker?.name || 'Unknown',
+                        email: app.jobSeeker?.email,
+                        title: app.jobSeeker?.title,
+                        location: app.jobSeeker?.location,
+                        profileImage: app.jobSeeker?.profileImage
+                    },
+                    appliedAt: app.appliedAt,
+                    status: app.status,
+                    matchScore: analysis?.matchScore ?? 0,
+                    strengths: analysis?.strengths ?? [],
+                    weaknesses: analysis?.weaknesses ?? [],
+                    reasoning: analysis?.reasoning ?? 'Analysis not available.'
+                };
+            }).sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+            
+            console.log(`[Screening] Returning ${finalFallbackResults.length} analyzed candidates (fallback mode).`);
+            return res.json({
+                job: {
+                    id: job._id,
+                    title: job.title,
+                    company: job.company
+                },
+                candidates: finalFallbackResults
             });
         }
         
-        // Sort results by score descending
-        analysisResults.sort((a, b) => b.overallScore - a.overallScore);
-        
+        // --- AI Screening Implementation --- 
+        console.log('[Screening] Preparing data for AI analysis...');
+
+        // 1. Construct the Prompt
+        let prompt = `Act as an expert recruitment screener for HireSphere. Evaluate the following candidates who applied for the job described below. Assess their fit based ONLY on the provided profile information against the job requirements.
+
+`;
+        prompt += `**Job Details:**
+`;
+        prompt += `- Title: ${job.title || 'N/A'}\n`;
+        prompt += `- Description: ${job.description || 'N/A'}\n`;
+        prompt += `- Requirements: ${job.requirements || 'N/A'}\n`;
+        prompt += `- Location: ${job.location || 'N/A'}\n\n`;
+        prompt += `**Candidate Profiles:**\n---\n`;
+
+        applications.forEach((app, index) => {
+            const seeker = app.jobSeeker;
+            if (!seeker) return; // Skip if seeker data is missing
+
+            prompt += `**Candidate ${index + 1} (Application ID: ${app._id})**\n`;
+            prompt += `- Name: ${seeker.name || 'N/A'}\n`;
+            prompt += `- Title: ${seeker.title || 'N/A'}\n`;
+            prompt += `- Location: ${seeker.location || 'N/A'}\n`;
+            prompt += `- Total Experience (Years): ${seeker.totalYearsExperience !== undefined ? seeker.totalYearsExperience : 'N/A'}\n`;
+            prompt += `- Skills: ${seeker.skills && seeker.skills.length > 0 ? seeker.skills.join(', ') : 'None listed'}\n`;
+            
+            // Summarize Experience (optional, could make prompt long)
+            if (seeker.experience && seeker.experience.length > 0) {
+                prompt += `- Experience Summary: ${seeker.experience.map(e => `${e.title} at ${e.company}`).join('; ')}\n`;
+            }
+            // Summarize Education (optional)
+            if (seeker.education && seeker.education.length > 0) {
+                prompt += `- Education Summary: ${seeker.education.map(e => `${e.degree} from ${e.institution}`).join('; ')}\n`;
+            }
+            prompt += `---\n`;
+        });
+
+        prompt += `\n**Instructions:**
+`;
+        prompt += `1. For each candidate, provide a detailed analysis comparing their profile (skills, experience level, title, location) to the Job Details.
+`;
+        prompt += `2. Assign a Match Score (0-100) indicating overall fit (0=No Fit, 100=Perfect Fit).
+`;
+        prompt += `3. List key Strengths (max 3 bullet points) aligning with job requirements.
+`;
+        prompt += `4. List key Weaknesses/Gaps (max 3 bullet points) where the profile falls short.
+`;
+        prompt += `5. Provide brief Reasoning (1-2 sentences) explaining the score.
+`;
+        prompt += `6. Return the response as a single valid JSON object with a key "candidateAnalysis" containing an array. Each element in the array should be an object with these EXACT keys: "applicationId", "matchScore", "strengths", "weaknesses", "reasoning".
+`;
+        prompt += `7. Ensure the "applicationId" matches the ID provided in the candidate profile section.
+`;
+        prompt += `8. Sort the array by "matchScore" in descending order.
+`;
+        prompt += `Example format for one candidate:
+ { "applicationId": "${applications[0]._id}", "matchScore": 85, "strengths": ["Strong alignment in required skill X", "Relevant experience in Y"], "weaknesses": ["Lacks specific tool Z"], "reasoning": "Good overall fit due to skills and experience, minor gap in tooling." }
+
+JSON Response:
+`;
+
+        // 2. Call Gemini API
+        console.log('[Screening] Sending prompt to Gemini AI...');
+        console.log('[Screening] Prompt length:', prompt.length);
+        // Don't log full prompt in production
+
+        const aiResult = await geminiModel.generateContent({ 
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: {
+                // Ensure JSON output if supported by model version
+                responseMimeType: "application/json", 
+            },
+        });
+        const aiResponse = await aiResult.response;
+        const responseText = aiResponse.text();
+        console.log('[Screening] Received raw response from Gemini AI. Response length:', responseText.length);
+
+        // 3. Parse AI Response
+        let analysisResults = [];
+        try {
+            // Assuming the model adhered to responseMimeType: "application/json"
+            console.log('[Screening] Attempting to parse JSON response...');
+            
+            // Add a preprocessing step to clean up potentially malformed JSON
+            let cleanedResponseText = responseText;
+            
+            // Try to extract JSON from the response if there's any wrapper text
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                cleanedResponseText = jsonMatch[0];
+                console.log('[Screening] Extracted JSON object from response');
+            }
+            
+            try {
+                const parsedJson = JSON.parse(cleanedResponseText);
+                
+                if (parsedJson.candidateAnalysis && Array.isArray(parsedJson.candidateAnalysis)) {
+                    analysisResults = parsedJson.candidateAnalysis;
+                    console.log(`[Screening] Successfully parsed AI analysis for ${analysisResults.length} candidates.`);
+                } else {
+                    console.warn('[Screening] AI response JSON did not contain expected structure (candidateAnalysis array).');
+                    console.warn('[Screening] JSON keys found:', Object.keys(parsedJson).join(', '));
+                    
+                    // Try to extract candidateAnalysis if it exists somewhere in the structure
+                    if (typeof parsedJson === 'object') {
+                        const findCandidateAnalysis = (obj) => {
+                            for (const key in obj) {
+                                if (key === 'candidateAnalysis' && Array.isArray(obj[key])) {
+                                    return obj[key];
+                                } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                                    const result = findCandidateAnalysis(obj[key]);
+                                    if (result) return result;
+                                }
+                            }
+                            return null;
+                        };
+                        
+                        const foundAnalysis = findCandidateAnalysis(parsedJson);
+                        if (foundAnalysis) {
+                            analysisResults = foundAnalysis;
+                            console.log(`[Screening] Found candidateAnalysis in nested object with ${analysisResults.length} items`);
+                        } else {
+                            throw new Error('AI response structure incorrect.');
+                        }
+                    } else {
+                        throw new Error('AI response structure incorrect.');
+                    }
+                }
+            } catch (innerError) {
+                console.warn('[Screening] Initial JSON parse failed, attempting manual JSON cleaning...');
+                
+                // More aggressive JSON cleaning for common issues
+                cleanedResponseText = cleanedResponseText
+                    .replace(/,\s*}/g, '}')  // Remove trailing commas in objects
+                    .replace(/,\s*]/g, ']')  // Remove trailing commas in arrays
+                    .replace(/\\/g, '\\\\')  // Escape backslashes
+                    .replace(/"\s*\n\s*"/g, '", "') // Fix newlines between string items
+                    .replace(/\n/g, '\\n');  // Escape newlines within strings
+                    
+                try {
+                    const parsedJson = JSON.parse(cleanedResponseText);
+                    if (parsedJson.candidateAnalysis && Array.isArray(parsedJson.candidateAnalysis)) {
+                        analysisResults = parsedJson.candidateAnalysis;
+                        console.log(`[Screening] Successfully parsed AI analysis after cleanup for ${analysisResults.length} candidates.`);
+                    } else {
+                        throw new Error('AI response structure incorrect after cleanup.');
+                    }
+                } catch (finalError) {
+                    console.error('[Screening] Failed all JSON parsing attempts:', finalError);
+                    throw finalError; // Re-throw to be caught by the outer catch
+                }
+            }
+        } catch (parseError) {
+            console.error('[Screening] Error parsing AI JSON response:', parseError);
+            console.error('[Screening] Raw AI Response Text start:', responseText.substring(0, 200) + '...');
+            console.error('[Screening] Response ends with:', responseText.substring(responseText.length - 100));
+            
+            // For now, return placeholder error scores
+            analysisResults = applications.map(app => ({ 
+                applicationId: app._id.toString(), 
+                matchScore: -1, 
+                strengths: [], 
+                weaknesses: [], 
+                reasoning: 'Error parsing AI analysis.'
+            }));
+        }
+
+        // 4. Format and Return Results
+        // Map AI results back to application data for the final response
+        const finalResults = applications.map(app => {
+            const analysis = analysisResults.find(res => res.applicationId === app._id.toString());
+            return {
+                applicationId: app._id,
+                candidate: {
+                    id: app.jobSeeker?._id,
+                    name: app.jobSeeker?.name || 'Unknown',
+                    email: app.jobSeeker?.email,
+                    title: app.jobSeeker?.title,
+                    location: app.jobSeeker?.location,
+                    profileImage: app.jobSeeker?.profileImage
+                },
+                appliedAt: app.appliedAt,
+                status: app.status,
+                // AI Analysis Data (or placeholders)
+                matchScore: analysis?.matchScore ?? 0,
+                strengths: analysis?.strengths ?? [],
+                weaknesses: analysis?.weaknesses ?? [],
+                reasoning: analysis?.reasoning ?? (analysis?.matchScore === -1 ? 'Error parsing AI analysis.' : 'Analysis not available.')
+            };
+        })
+        // Sort by matchScore descending
+        .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)); 
+
+        console.log(`[Screening] Returning ${finalResults.length} analyzed candidates.`);
         return res.json({
             job: {
                 id: job._id,
                 title: job.title,
-                company: job.company,
-                location: job.location
+                company: job.company
             },
-            candidateAnalysis: analysisResults
+            candidates: finalResults
         });
+
     } catch (error) {
-        console.error('Error in candidate analysis:', error);
-        return res.status(500).json({ error: 'Server error while analyzing candidates' });
+        console.error('[Screening] Error in AI candidate analysis:', error);
+        // Handle potential Gemini API errors specifically if needed
+        if (error.message?.includes('API key')) {
+            return res.status(500).json({ message: 'AI service configuration error.' });
+        }
+        return res.status(500).json({ 
+            message: 'Server error during AI analysis.', 
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
-
-/**
- * @route   POST /api/screening/jobs/:jobId/candidates
- * @desc    Rank candidates for a job based on match percentage
- * @access  Private (Employers only)
- */
-router.post('/jobs/:jobId/candidates', authenticateUser, isEmployer, async (req, res) => {
-    try {
-        const jobId = req.params.jobId;
-        
-        // Verify the job belongs to the current employer
-        const job = await Job.findById(jobId);
-        if (!job) {
-            return res.status(404).json({ error: 'Job not found' });
-        }
-        
-        if (job.employer.toString() !== req.user.id) {
-            return res.status(403).json({ error: 'You are not authorized to access this job' });
-        }
-        
-        // Get all applications for this job
-        const applications = await Application.find({ job: jobId })
-            .populate({
-                path: 'jobSeeker',
-                populate: {
-                    path: 'user',
-                    select: 'name email'
-                }
-            });
-            
-        if (applications.length === 0) {
-            return res.status(404).json({ error: 'No applications found for this job' });
-        }
-        
-        // Get detailed job seeker information for each application
-        const detailedApplications = await Promise.all(applications.map(async (application) => {
-            const jobSeeker = await JobSeeker.findById(application.jobSeeker._id);
-            return {
-                application,
-                jobSeeker
-            };
-        }));
-        
-        // Use Gemini AI to analyze and rank candidates
-        let rankingResults = [];
-        const useFallback = req.query.useFallback === 'true';
-        
-        if (!useFallback) {
-            try {
-                const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-                
-                // Create a comprehensive job description for AI analysis
-                const jobDescription = {
-                    title: job.title,
-                    company: job.company,
-                    description: job.description,
-                    requirements: job.requirements,
-                    skills: job.skills?.join(', ') || 'Not specified',
-                    location: job.location,
-                    type: job.type
-                };
-                
-                // Process each candidate with AI to get detailed ranking
-                rankingResults = await Promise.all(detailedApplications.map(async (data, index) => {
-                    const candidate = {
-                        name: data.jobSeeker.user.name,
-                        skills: data.jobSeeker.skills?.join(', ') || 'Not provided',
-                        experience: data.jobSeeker.experience?.map(exp => 
-                            `${exp.title} at ${exp.company} (${exp.startDate.substring(0, 7)} to ${
-                                exp.current ? 'Present' : exp.endDate.substring(0, 7)
-                            }): ${exp.description}`).join(' | ') || 'Not provided',
-                        education: data.jobSeeker.education?.map(edu => 
-                            `${edu.degree} in ${edu.fieldOfStudy} from ${edu.institution} (${
-                                edu.startDate.substring(0, 7)} to ${edu.endDate.substring(0, 7)
-                            })`).join(' | ') || 'Not provided',
-                        coverLetter: data.application.coverLetter || 'Not provided'
-                    };
-                    
-                    // Construct the prompt for candidate ranking
-                    const prompt = `
-                    You are an AI-powered recruiting assistant helping to rank job candidates based on their match percentage for a specific job.
-                    
-                    Job details:
-                    - Title: ${jobDescription.title}
-                    - Company: ${jobDescription.company}
-                    - Description: ${jobDescription.description}
-                    - Requirements: ${jobDescription.requirements}
-                    - Skills needed: ${jobDescription.skills}
-                    - Location: ${jobDescription.location}
-                    - Job type: ${jobDescription.type}
-                    
-                    Candidate #${index + 1} details:
-                    - Name: ${candidate.name}
-                    - Skills: ${candidate.skills}
-                    - Experience: ${candidate.experience}
-                    - Education: ${candidate.education}
-                    - Cover Letter: ${candidate.coverLetter}
-                    
-                    Based on the job requirements and candidate profile, provide a detailed assessment with:
-                    1. A match score from 0-100
-                    2. Key strengths that match the job requirements (list 3-5)
-                    3. Skill gaps or areas for improvement (list 2-3)
-                    4. A brief explanation of why this candidate would be a good fit
-                    
-                    Format your response as a valid JSON object with these exact keys: matchScore, strengths, gaps, explanation
-                    The matchScore should be a number, and strengths and gaps should be arrays of strings.
-                    `;
-                    
-                    try {
-                        // Generate content
-                        const result = await model.generateContent(prompt);
-                        const response = result.response;
-                        const text = response.text();
-                        
-                        // Parse the JSON from the response
-                        const jsonStr = text.match(/\{[\s\S]*\}/)?.[0] || text;
-                        const ranking = JSON.parse(jsonStr);
-                        
-                        return {
-                            applicationId: data.application._id,
-                            candidate: {
-                                id: data.jobSeeker._id,
-                                name: data.jobSeeker.user.name,
-                                email: data.jobSeeker.user.email
-                            },
-                            matchScore: ranking.matchScore || 0,
-                            strengths: ranking.strengths || [],
-                            gaps: ranking.gaps || [],
-                            explanation: ranking.explanation || '',
-                            appliedAt: data.application.createdAt,
-                            status: data.application.status
-                        };
-                    } catch (error) {
-                        console.error(`Error ranking candidate ${index}:`, error);
-                        // Return fallback scoring for this candidate
-                        const fallbackScore = calculateFallbackScore(job, data.application, data.jobSeeker);
-                        return fallbackScore;
-                    }
-                }));
-            } catch (error) {
-                console.error('Error using AI for candidate ranking, falling back to standard scoring', error);
-                useFallback = true;
-            }
-        }
-        
-        // Fallback to simpler scoring method if AI fails
-        if (useFallback || rankingResults.length === 0) {
-            rankingResults = detailedApplications.map((data) => {
-                return calculateFallbackScore(job, data.application, data.jobSeeker);
-            });
-        }
-        
-        // Sort results by match score descending
-        rankingResults.sort((a, b) => b.matchScore - a.matchScore);
-        
-        return res.json({
-            jobTitle: job.title,
-            totalCandidates: rankingResults.length,
-            candidates: rankingResults
-        });
-    } catch (error) {
-        console.error('Error in candidate ranking:', error);
-        return res.status(500).json({ error: 'Server error while ranking candidates' });
-    }
-});
-
-/**
- * Helper function to calculate a fallback match score
- */
-function calculateFallbackScore(job, application, jobSeeker) {
-    // Calculate skills match percentage
-    let skillsMatchScore = 0;
-    let matchedSkills = [];
-    
-    if (job.skills && job.skills.length > 0 && jobSeeker.skills && jobSeeker.skills.length > 0) {
-        matchedSkills = job.skills.filter(skill => 
-            jobSeeker.skills.some(seekerSkill => 
-                seekerSkill.toLowerCase().includes(skill.toLowerCase()) || 
-                skill.toLowerCase().includes(seekerSkill.toLowerCase())
-            )
-        );
-        
-        skillsMatchScore = Math.round((matchedSkills.length / job.skills.length) * 100);
-    }
-    
-    // Calculate experience relevance percentage
-    let experienceScore = 0;
-    
-    if (jobSeeker.experience && jobSeeker.experience.length > 0) {
-        // Basic scoring based on number of experiences
-        experienceScore = Math.min(jobSeeker.experience.length * 20, 100);
-        
-        // Bonus for relevant experience
-        const relevantExperiences = jobSeeker.experience.filter(exp => 
-            exp.title.toLowerCase().includes(job.title.toLowerCase()) ||
-            job.title.toLowerCase().includes(exp.title.toLowerCase()) ||
-            exp.description.toLowerCase().includes(job.title.toLowerCase())
-        );
-        
-        if (relevantExperiences.length > 0) {
-            experienceScore = Math.min(experienceScore + 20, 100);
-        }
-    }
-    
-    // Calculate cover letter quality
-    let coverLetterScore = 0;
-    
-    if (application.coverLetter) {
-        const letterLength = application.coverLetter.length;
-        
-        // Basic scoring based on length and content
-        if (letterLength < 100) {
-            coverLetterScore = 30;
-        } else if (letterLength < 300) {
-            coverLetterScore = 60;
-        } else {
-            coverLetterScore = 80;
-        }
-        
-        // Bonus for mentioning job title or company
-        if (application.coverLetter.toLowerCase().includes(job.title.toLowerCase())) {
-            coverLetterScore = Math.min(coverLetterScore + 10, 100);
-        }
-        
-        if (application.coverLetter.toLowerCase().includes(job.company.toLowerCase())) {
-            coverLetterScore = Math.min(coverLetterScore + 10, 100);
-        }
-    }
-    
-    // Calculate overall match score with appropriate weighting
-    const matchScore = Math.round((skillsMatchScore * 0.6) + (experienceScore * 0.3) + (coverLetterScore * 0.1));
-    
-    // Generate basic strengths based on match areas
-    const strengths = [];
-    if (skillsMatchScore > 50) strengths.push(`Matches ${matchedSkills.length} of ${job.skills.length} required skills`);
-    if (experienceScore > 60) strengths.push("Has relevant work experience");
-    if (coverLetterScore > 70) strengths.push("Strong application with tailored cover letter");
-    
-    // Generate basic gaps
-    const gaps = [];
-    if (skillsMatchScore < 50) gaps.push("Missing several required skills");
-    if (experienceScore < 40) gaps.push("Limited relevant experience");
-    
-    return {
-        applicationId: application._id,
-        candidate: {
-            id: jobSeeker._id,
-            name: jobSeeker.user.name,
-            email: jobSeeker.user.email
-        },
-        matchScore,
-        strengths,
-        gaps,
-        explanation: `Candidate matches ${matchScore}% of job requirements based on skills, experience, and application quality.`,
-        appliedAt: application.createdAt,
-        status: application.status
-    };
-}
-
-/**
- * Function to analyze an application using Gemini AI
- */
-async function analyzeWithAI(job, application, jobSeeker) {
-    // Create a model instance
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-    
-    // Construct the prompt for the AI
-    const prompt = `
-    Task: Analyze this job candidate's fit for the following position and provide a detailed assessment.
-    
-    JOB DETAILS:
-    - Title: ${job.title}
-    - Company: ${job.company}
-    - Description: ${job.description}
-    - Requirements: ${job.requirements}
-    - Skills Required: ${job.skills ? job.skills.join(', ') : 'Not specified'}
-    
-    CANDIDATE DETAILS:
-    - Name: ${jobSeeker.user.name}
-    - Skills: ${jobSeeker.skills ? jobSeeker.skills.join(', ') : 'Not provided'}
-    - Experience: ${jobSeeker.experience ? jobSeeker.experience.map(exp => 
-        `${exp.title} at ${exp.company} (${exp.startDate.substring(0, 7)} to ${
-            exp.current ? 'Present' : exp.endDate.substring(0, 7)
-        }): ${exp.description}`).join(' | ') : 'Not provided'}
-    - Education: ${jobSeeker.education ? jobSeeker.education.map(edu => 
-        `${edu.degree} in ${edu.fieldOfStudy} from ${edu.institution} (${
-            edu.startDate.substring(0, 7)} to ${edu.endDate.substring(0, 7)
-        })`).join(' | ') : 'Not provided'}
-    - Cover Letter: ${application.coverLetter || 'Not provided'}
-    
-    Analyze this candidate and provide:
-    1. Overall match score (0-100)
-    2. Skills match score (0-100) with explanation
-    3. Experience relevance score (0-100) with explanation
-    4. Cover letter quality score (0-100) with explanation
-    5. Key strengths (list 3)
-    6. Areas of concern (list 2)
-    7. Interview recommendations (3 specific questions to ask)
-    
-    Format the response as a valid JSON object with these exact keys: overallScore, skillsMatchScore, skillsMatchReason, experienceScore, experienceReason, coverLetterScore, coverLetterReason, strengths, concerns, interviewQuestions
-    `;
-
-    try {
-        // Generate content
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        const text = response.text();
-        
-        // Parse the JSON from the response
-        // Find JSON part in the response if it's not cleanly formatted
-        const jsonStr = text.match(/\{[\s\S]*\}/)?.[0] || text;
-        const analysisResult = JSON.parse(jsonStr);
-        
-        // Add candidate info to the result
-        return {
-            ...analysisResult,
-            applicationId: application._id,
-            jobSeekerId: jobSeeker._id,
-            candidateName: jobSeeker.user.name,
-            candidateEmail: jobSeeker.user.email,
-            applicationDate: application.createdAt
-        };
-    } catch (error) {
-        console.error('Error in AI analysis:', error);
-        // Return standard scoring as fallback
-        return scoreApplication(job, application, jobSeeker);
-    }
-}
-
-/**
- * Fallback function to score applications without AI
- */
-function scoreApplication(job, application, jobSeeker) {
-    // Calculate skills match score
-    let skillsMatchScore = 0;
-    let skillsMatchReason = 'No skills provided';
-    
-    if (job.skills && job.skills.length > 0 && jobSeeker.skills && jobSeeker.skills.length > 0) {
-        const matchingSkills = job.skills.filter(skill => 
-            jobSeeker.skills.some(seekerSkill => 
-                seekerSkill.toLowerCase().includes(skill.toLowerCase()) || 
-                skill.toLowerCase().includes(seekerSkill.toLowerCase())
-            )
-        );
-        
-        skillsMatchScore = Math.round((matchingSkills.length / job.skills.length) * 100);
-        skillsMatchReason = `Candidate has ${matchingSkills.length} of ${job.skills.length} required skills.`;
-    }
-    
-    // Calculate experience relevance
-    let experienceScore = 0;
-    let experienceReason = 'No experience provided';
-    
-    if (jobSeeker.experience && jobSeeker.experience.length > 0) {
-        // Basic scoring based on number of experiences
-        experienceScore = Math.min(jobSeeker.experience.length * 20, 100);
-        
-        // Check for title relevance with job title
-        const relevantExperiences = jobSeeker.experience.filter(exp => 
-            exp.title.toLowerCase().includes(job.title.toLowerCase()) ||
-            job.title.toLowerCase().includes(exp.title.toLowerCase()) ||
-            exp.description.toLowerCase().includes(job.title.toLowerCase())
-        );
-        
-        if (relevantExperiences.length > 0) {
-            experienceScore = Math.min(experienceScore + 20, 100);
-        }
-        
-        experienceReason = `Candidate has ${jobSeeker.experience.length} positions in their work history.`;
-    }
-    
-    // Calculate cover letter quality
-    let coverLetterScore = 0;
-    let coverLetterReason = 'No cover letter provided';
-    
-    if (application.coverLetter) {
-        const letterLength = application.coverLetter.length;
-        
-        // Basic scoring based on length
-        if (letterLength < 100) {
-            coverLetterScore = 30;
-            coverLetterReason = 'Cover letter is very short.';
-        } else if (letterLength < 300) {
-            coverLetterScore = 60;
-            coverLetterReason = 'Cover letter is of moderate length.';
-        } else {
-            coverLetterScore = 80;
-            coverLetterReason = 'Cover letter is detailed.';
-        }
-        
-        // Check for job title mention
-        if (application.coverLetter.toLowerCase().includes(job.title.toLowerCase())) {
-            coverLetterScore = Math.min(coverLetterScore + 10, 100);
-            coverLetterReason += ' Mentions the specific job title.';
-        }
-        
-        // Check for company mention
-        if (application.coverLetter.toLowerCase().includes(job.company.toLowerCase())) {
-            coverLetterScore = Math.min(coverLetterScore + 10, 100);
-            coverLetterReason += ' Mentions the company name.';
-        }
-    }
-    
-    // Calculate overall score
-    const overallScore = Math.round((skillsMatchScore * 0.4) + (experienceScore * 0.4) + (coverLetterScore * 0.2));
-    
-    return {
-        applicationId: application._id,
-        jobSeekerId: jobSeeker._id,
-        candidateName: jobSeeker.user.name,
-        candidateEmail: jobSeeker.user.email,
-        applicationDate: application.createdAt,
-        overallScore,
-        skillsMatchScore,
-        skillsMatchReason,
-        experienceScore,
-        experienceReason,
-        coverLetterScore,
-        coverLetterReason,
-        strengths: ['Based on keyword matching only'],
-        concerns: ['Automated scoring has limitations'],
-        interviewQuestions: [
-            `Tell me more about your experience with ${job.skills?.[0] || 'this field'}.`,
-            'What interests you about this position?',
-            'Why do you want to work with our company?'
-        ]
-    };
-}
 
 module.exports = router; 

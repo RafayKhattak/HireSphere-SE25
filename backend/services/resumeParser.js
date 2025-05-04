@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
-const { GoogleGenerativeAI, Part } = require('@google/genai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 /**
  * Resume Parser Service

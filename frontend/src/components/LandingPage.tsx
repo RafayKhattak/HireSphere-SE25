@@ -16,16 +16,14 @@ import {
     Link,
     Stack
 } from '@mui/material';
-import {
-    Work as WorkIcon,
-    Search as SearchIcon,
-    Business as BusinessIcon,
-    Person as PersonIcon,
-    ArrowForward as ArrowForwardIcon,
-    LinkedIn as LinkedInIcon,
-    Twitter as TwitterIcon,
-    GitHub as GitHubIcon
-} from '@mui/icons-material';
+import WorkIcon from '@mui/icons-material/Work';
+import SearchIcon from '@mui/icons-material/Search';
+import BusinessIcon from '@mui/icons-material/Business';
+import PersonIcon from '@mui/icons-material/Person';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import LinkedInIcon from '@mui/icons-material/LinkedIn';
+import TwitterIcon from '@mui/icons-material/Twitter';
+import GitHubIcon from '@mui/icons-material/GitHub';
 import { motion } from 'framer-motion';
 
 const MotionBox = motion(Box);
@@ -72,8 +70,8 @@ const LandingPage: React.FC = () => {
                 }}
             >
                 <Container maxWidth="lg">
-                    <Grid container spacing={4} alignItems="center">
-                        <Grid item xs={12} md={6}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-2), alignItems: 'center' }}>
+                        <Box sx={{ padding: theme => theme.spacing(2), width: { xs: '100%', md: '50%' } }}>
                             <MotionBox
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -131,8 +129,8 @@ const LandingPage: React.FC = () => {
                                     </Button>
                                 </Stack>
                             </MotionBox>
-                        </Grid>
-                        <Grid item xs={12} md={6}>
+                        </Box>
+                        <Box sx={{ padding: theme => theme.spacing(2), width: { xs: '100%', md: '50%' } }}>
                             <MotionBox
                                 initial={{ opacity: 0, scale: 0.8 }}
                                 animate={{ opacity: 1, scale: 1 }}
@@ -150,8 +148,8 @@ const LandingPage: React.FC = () => {
                                     }}
                                 />
                             </MotionBox>
-                        </Grid>
-                    </Grid>
+                        </Box>
+                    </Box>
                 </Container>
             </Box>
 
@@ -166,9 +164,9 @@ const LandingPage: React.FC = () => {
                 >
                     Why Choose HireSphere?
                 </Typography>
-                <Grid container spacing={4}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-2) }}>
                     {features.map((feature, index) => (
-                        <Grid item xs={12} sm={6} md={3} key={index}>
+                        <Box sx={{ padding: theme => theme.spacing(2), width: { xs: '100%', sm: '50%', md: '25%' } }} key={index}>
                             <Fade in timeout={1000} style={{ transitionDelay: `${index * 100}ms` }}>
                                 <Card
                                     sx={{
@@ -194,17 +192,17 @@ const LandingPage: React.FC = () => {
                                     </CardContent>
                                 </Card>
                             </Fade>
-                        </Grid>
+                        </Box>
                     ))}
-                </Grid>
+                </Box>
             </Container>
 
             {/* Call to Action Section */}
             {!isAuthenticated && (
                 <Box sx={{ py: 8, bgcolor: 'background.paper' }}>
                     <Container maxWidth="lg">
-                        <Grid container spacing={4} alignItems="center">
-                            <Grid item xs={12} md={6}>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-2), alignItems: 'center' }}>
+                            <Box sx={{ padding: theme => theme.spacing(2), width: { xs: '100%', md: '50%' } }}>
                                 <Typography variant="h3" component="h2" gutterBottom>
                                     Create Your Account Today
                                 </Typography>
@@ -219,8 +217,8 @@ const LandingPage: React.FC = () => {
                                 >
                                     Sign Up Now
                                 </Button>
-                            </Grid>
-                            <Grid item xs={12} md={6}>
+                            </Box>
+                            <Box sx={{ padding: theme => theme.spacing(2), width: { xs: '100%', md: '50%' } }}>
                                 <Box sx={{ position: 'relative', height: { xs: 300, md: 400 } }}>
                                     <Box
                                         component="img"
@@ -234,8 +232,8 @@ const LandingPage: React.FC = () => {
                                         }}
                                     />
                                 </Box>
-                            </Grid>
-                        </Grid>
+                            </Box>
+                        </Box>
                     </Container>
                 </Box>
             )}
@@ -250,16 +248,16 @@ const LandingPage: React.FC = () => {
                 }}
             >
                 <Container maxWidth="lg">
-                    <Grid container spacing={4}>
-                        <Grid item xs={12} md={4}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-2) }}>
+                        <Box sx={{ padding: theme => theme.spacing(2), width: { xs: '100%', md: '33.33%' } }}>
                             <Typography variant="h6" gutterBottom>
                                 HireSphere
                             </Typography>
                             <Typography variant="body2" sx={{ opacity: 0.7 }}>
                                 Connecting tech talent with amazing opportunities through AI-powered job matching.
                             </Typography>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
+                        </Box>
+                        <Box sx={{ padding: theme => theme.spacing(2), width: { xs: '100%', md: '33.33%' } }}>
                             <Typography variant="h6" gutterBottom>
                                 Quick Links
                             </Typography>
@@ -274,8 +272,8 @@ const LandingPage: React.FC = () => {
                                     Contact
                                 </Link>
                             </Stack>
-                        </Grid>
-                        <Grid item xs={12} md={4}>
+                        </Box>
+                        <Box sx={{ padding: theme => theme.spacing(2), width: { xs: '100%', md: '33.33%' } }}>
                             <Typography variant="h6" gutterBottom>
                                 Connect With Us
                             </Typography>
@@ -290,8 +288,8 @@ const LandingPage: React.FC = () => {
                                     <GitHubIcon />
                                 </IconButton>
                             </Stack>
-                        </Grid>
-                    </Grid>
+                        </Box>
+                    </Box>
                     <Typography
                         variant="body2"
                         align="center"

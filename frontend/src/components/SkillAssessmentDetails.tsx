@@ -259,8 +259,8 @@ const SkillAssessmentDetails: React.FC = () => {
           </Box>
         </Box>
 
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={4}>
+        <Box display="grid" gridTemplateColumns="repeat(12, 1fr)" gap={4}>
+          <Box sx={{ gridColumn: { xs: 'span 12', md: 'span 4' } }}>
             <Card sx={{ height: '100%', backgroundColor: '#e8f5e9' }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom color="success.main">
@@ -278,9 +278,9 @@ const SkillAssessmentDetails: React.FC = () => {
                 </List>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
           
-          <Grid item xs={12} md={4}>
+          <Box sx={{ gridColumn: { xs: 'span 12', md: 'span 4' } }}>
             <Card sx={{ height: '100%', backgroundColor: '#fff3e0' }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom color="warning.main">
@@ -298,9 +298,9 @@ const SkillAssessmentDetails: React.FC = () => {
                 </List>
               </CardContent>
             </Card>
-          </Grid>
+          </Box>
           
-          <Grid item xs={12} md={4}>
+          <Box sx={{ gridColumn: { xs: 'span 12', md: 'span 4' } }}>
             <Card sx={{ height: '100%', backgroundColor: '#e3f2fd' }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom color="primary">
@@ -318,8 +318,8 @@ const SkillAssessmentDetails: React.FC = () => {
                 </List>
               </CardContent>
             </Card>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
 
         <Card sx={{ mt: 4 }}>
           <CardContent>

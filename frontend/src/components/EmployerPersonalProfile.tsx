@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
+import { employerService } from '../services/api';
 import { User } from '../types';
 import {
   Container,
@@ -9,12 +9,14 @@ import {
   Box,
   TextField,
   Button,
-  Grid,
   CircularProgress,
   Alert,
   Divider,
   Avatar,
-  IconButton
+  IconButton,
+  DialogContent,
+  DialogActions,
+  Badge
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
@@ -49,15 +51,14 @@ const EmployerPersonalProfile: React.FC = () => {
     const fetchProfile = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/employer/profile');
-        setProfileData(response.data);
+        const response = await employerService.getProfile();
         
-        // Set form values
-        setName(response.data.name || '');
-        setEmail(response.data.email || '');
-        setPhone(response.data.phone || '');
-        setLocation(response.data.location || '');
-        setProfileImage(response.data.profileImage || '');
+        // Access fields directly from the response object
+        setName(response.name || '');
+        setEmail(response.email || '');
+        setPhone(response.phone || '');
+        setLocation(response.location || '');
+        setProfileImage(response.profileImage || '');
         
         setError(null);
       } catch (err: any) {
@@ -191,41 +192,17 @@ const EmployerPersonalProfile: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setError(null);
     try {
-      setSaveLoading(true);
-      setError(null);
-      setSuccess(null);
-      
-      const profileDataToUpdate = {
-        name,
-        phone,
-        location,
-        profileImage
-      };
-      
-      const response = await api.put('/employer/personal-profile', profileDataToUpdate);
-      
-      setProfileData(response.data);
-      setSuccess('Personal profile updated successfully');
-
-      // Update user context if available
-      if (updateUserContext && user) {
-        const updatedUser = {
-          ...user,
-          name,
-          phone,
-          location,
-          profileImage
-        };
-        // Type assertion to make TypeScript happy
-        updateUserContext(updatedUser as User);
-      }
+      setLoading(true);
+      const profileData = { name, phone, location };
+      await employerService.updateProfile(profileData);
+      setSuccess('Profile updated successfully!');
     } catch (err: any) {
       console.error('Error updating personal profile:', err);
       setError(err.response?.data?.message || 'Failed to update profile');
     } finally {
-      setSaveLoading(false);
+      setLoading(false);
     }
   };
 
@@ -302,14 +279,14 @@ const EmployerPersonalProfile: React.FC = () => {
         {success && <Alert severity="success" sx={{ mb: 3 }}>{success}</Alert>}
         
         <form onSubmit={handleSubmit}>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1.5) }}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <Typography variant="h6" gutterBottom>
                 Basic Information
               </Typography>
-            </Grid>
+            </Box>
 
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Your Full Name"
                 value={name}
@@ -318,9 +295,9 @@ const EmployerPersonalProfile: React.FC = () => {
                 required
                 variant="outlined"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Email"
                 value={email}
@@ -329,9 +306,9 @@ const EmployerPersonalProfile: React.FC = () => {
                 variant="outlined"
                 helperText="Email cannot be changed"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Phone Number"
                 value={phone}
@@ -339,9 +316,9 @@ const EmployerPersonalProfile: React.FC = () => {
                 fullWidth
                 variant="outlined"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} md={6}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: { xs: '100%', md: '50%' } }}>
               <TextField
                 label="Location"
                 value={location}
@@ -350,9 +327,9 @@ const EmployerPersonalProfile: React.FC = () => {
                 variant="outlined"
                 placeholder="City, State, Country"
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12}>
+            <Box sx={{ padding: theme => theme.spacing(1.5), width: '100%' }}>
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                 <Button
                   type="submit"
@@ -365,8 +342,8 @@ const EmployerPersonalProfile: React.FC = () => {
                   {saveLoading ? <CircularProgress size={24} /> : 'Save Changes'}
                 </Button>
               </Box>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </form>
       </Paper>
     </Container>

@@ -13,9 +13,12 @@ const transporter = nodemailer.createTransport(config);
 
 // Schedule an interview (employer only)
 router.post('/schedule', auth, async (req, res) => {
+    console.log(`[Interview] Received request to schedule an interview from user ID: ${req.user.id}, type: ${req.user.type}`);
+    
     try {
         // Ensure user is an employer
         if (req.user.type !== 'employer') {
+            console.log(`[Interview] Access denied - user is not an employer: ${req.user.type}`);
             return res.status(403).json({ message: 'Access denied. Only employers can schedule interviews.' });
         }
 
@@ -29,9 +32,12 @@ router.post('/schedule', auth, async (req, res) => {
             interviewType,
             description
         } = req.body;
+        
+        console.log(`[Interview] Scheduling details: Application ID ${jobApplicationId}, Type: ${interviewType}, DateTime: ${new Date(scheduledDateTime).toLocaleString()}`);
 
         // Validate required fields
         if (!jobApplicationId || !scheduledDateTime || !location) {
+            console.log(`[Interview] Missing required fields: ${!jobApplicationId ? 'jobApplicationId' : ''} ${!scheduledDateTime ? 'scheduledDateTime' : ''} ${!location ? 'location' : ''}`);
             return res.status(400).json({ message: 'Missing required fields' });
         }
 
@@ -53,19 +59,24 @@ router.post('/schedule', auth, async (req, res) => {
         // Fetch the application
         const application = await JobApplication.findById(jobApplicationId);
         if (!application) {
+            console.log(`[Interview] Job application not found: ${jobApplicationId}`);
             return res.status(404).json({ message: 'Job application not found' });
         }
+        console.log(`[Interview] Found application for job ID: ${application.job}, jobSeeker ID: ${application.jobSeeker}`);
 
         // Fetch the job to verify employer ownership
         const job = await Job.findById(application.job);
         if (!job) {
+            console.log(`[Interview] Job not found: ${application.job}`);
             return res.status(404).json({ message: 'Job not found' });
         }
 
         // Verify the employer owns this job
         if (job.employer.toString() !== req.user.id) {
+            console.log(`[Interview] Authorization failed - employer ${req.user.id} does not own job ${job._id} (belongs to ${job.employer})`);
             return res.status(403).json({ message: 'Not authorized to schedule interviews for this job' });
         }
+        console.log(`[Interview] Employer authorization verified for job ID: ${job._id}`);
 
         // Check if there's already an interview scheduled for this application
         const existingInterview = await Interview.findOne({ jobApplication: jobApplicationId });
@@ -124,6 +135,7 @@ router.post('/schedule', auth, async (req, res) => {
         });
 
         await interview.save();
+        console.log(`[Interview] Successfully created interview with ID: ${interview._id}`);
 
         // Update application status and history
         application.status = 'interview';
@@ -134,6 +146,7 @@ router.post('/schedule', auth, async (req, res) => {
         });
 
         await application.save();
+        console.log(`[Interview] Updated application status to 'interview'`);
 
         // Send email notifications
         try {
@@ -143,6 +156,7 @@ router.post('/schedule', auth, async (req, res) => {
             
             if (jobSeeker && jobSeeker.email) {
                 // Send email to job seeker
+                console.log(`[Interview] Sending notification email to job seeker: ${jobSeeker.email}`);
                 await transporter.sendMail({
                     from: config.auth.user,
                     to: jobSeeker.email,
@@ -162,15 +176,16 @@ router.post('/schedule', auth, async (req, res) => {
                         <p>Good luck!</p>
                     `
                 });
+                console.log(`[Interview] Email notification sent successfully`);
             }
         } catch (emailError) {
-            console.error('Error sending interview notification email:', emailError);
+            console.error('[Interview] Error sending interview notification email:', emailError);
             // Don't fail the request if email fails
         }
 
         return res.status(201).json(interview);
     } catch (error) {
-        console.error('Error scheduling interview:', error);
+        console.error('[Interview] Error scheduling interview:', error);
         return res.status(500).json({ message: 'Server error' });
     }
 });

@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['jobseeker', 'employer'],
+        enum: ['jobseeker', 'employer', 'admin'],
         required: true
     },
     // Job Seeker specific fields
@@ -29,6 +29,10 @@ const userSchema = new mongoose.Schema({
         trim: true
     },
     lastName: {
+        type: String,
+        trim: true
+    },
+    title: {
         type: String,
         trim: true
     },
@@ -62,6 +66,9 @@ const userSchema = new mongoose.Schema({
         type: String,
         trim: true
     }],
+    totalYearsExperience: { type: Number, min: 0 },
+    resumeUrl: String,
+    portfolioUrl: String,
     // Employer specific fields
     companyName: {
         type: String,

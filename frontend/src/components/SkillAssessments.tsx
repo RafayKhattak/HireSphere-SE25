@@ -28,6 +28,7 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import AddIcon from '@mui/icons-material/Add';
 import { assessmentService } from '../services/api';
 import { SkillAssessment } from '../types';
+import { SelectChangeEvent } from '@mui/material/Select';
 
 const SkillAssessments: React.FC = () => {
   const navigate = useNavigate();
@@ -51,7 +52,7 @@ const SkillAssessments: React.FC = () => {
     try {
       setLoading(true);
       const data = await assessmentService.getMyAssessments();
-      setAssessments(data);
+      setAssessments(data.data || []);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch assessments');
     } finally {
@@ -63,22 +64,39 @@ const SkillAssessments: React.FC = () => {
     setDialogOpen(false);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }>) => {
+  // Separate handlers for different input types
+  const handleTextInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setNewAssessmentData({
-      ...newAssessmentData,
+    setNewAssessmentData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSelectChange = (e: SelectChangeEvent<unknown>) => {
+    const { name, value } = e.target;
+    setNewAssessmentData(prev => ({
+      ...prev,
       [name as string]: value
-    });
+    }));
   };
 
   const handleCreateAssessment = async () => {
     try {
       setLoading(true);
       const newAssessment = await assessmentService.generateAssessment(newAssessmentData);
+      
+      // Successfully created, close dialog & stop loading BEFORE navigating
       setDialogOpen(false);
-      navigate(`/assessments/${newAssessment._id}`);
+      setLoading(false); 
+      setError(''); // Clear previous errors
+
+      // Now navigate outside the try block - Use newAssessment._id directly
+      navigate(`/assessments/${newAssessment._id}`); 
+
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to create assessment');
+      // This catch block now only handles API errors
+      setError(err.response?.data?.message || 'Failed to generate assessment questions');
       setLoading(false);
     }
   };
@@ -165,7 +183,7 @@ const SkillAssessments: React.FC = () => {
         ) : (
           <Grid container spacing={3}>
             {assessments.map((assessment) => (
-              <Grid item xs={12} md={6} lg={4} key={assessment._id}>
+              <Grid component="div" sx={{ gridColumn: { xs: 'span 12', md: 'span 6', lg: 'span 4' } }} key={assessment._id}>
                 <Card sx={{ height: '100%', position: 'relative' }}>
                   {renderScoreBadge(assessment.score)}
                   <CardContent>
@@ -226,26 +244,26 @@ const SkillAssessments: React.FC = () => {
               knowledge and provide detailed feedback on your performance.
             </Typography>
             <Grid container spacing={3}>
-              <Grid item xs={12}>
+              <Grid component="div" sx={{ gridColumn: 'span 12' }}>
                 <TextField
                   required
                   fullWidth
                   label="Skill to Assess"
                   name="skill"
                   value={newAssessmentData.skill}
-                  onChange={handleInputChange}
+                  onChange={handleTextInputChange}
                   placeholder="e.g., JavaScript, React, UI/UX Design, Python"
                   margin="normal"
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid component="div" sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
                 <FormControl fullWidth margin="normal">
                   <InputLabel>Number of Questions</InputLabel>
                   <Select
                     value={newAssessmentData.questionCount}
                     name="questionCount"
                     label="Number of Questions"
-                    onChange={handleInputChange}
+                    onChange={handleSelectChange}
                   >
                     <MenuItem value={3}>3 (Quick)</MenuItem>
                     <MenuItem value={5}>5 (Standard)</MenuItem>
@@ -254,28 +272,38 @@ const SkillAssessments: React.FC = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid component="div" sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
                 <FormControl fullWidth margin="normal">
                   <InputLabel>Question Types</InputLabel>
                   <Select
-                    value={newAssessmentData.includeOpenEnded}
+                    value={newAssessmentData.includeOpenEnded ? "true" : "false"}
                     name="includeOpenEnded"
                     label="Question Types"
-                    onChange={handleInputChange}
+                    onChange={(e) => {
+                      setNewAssessmentData(prev => ({
+                        ...prev,
+                        includeOpenEnded: e.target.value === "true"
+                      }));
+                    }}
                   >
-                    <MenuItem value={true}>Mixed (Multiple-choice & Open-ended)</MenuItem>
-                    <MenuItem value={false}>Multiple-choice Only</MenuItem>
+                    <MenuItem value="true">Mixed (Multiple-choice & Open-ended)</MenuItem>
+                    <MenuItem value="false">Multiple-choice Only</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12}>
+              <Grid component="div" sx={{ gridColumn: 'span 12' }}>
                 <FormControl fullWidth margin="normal">
                   <InputLabel>AI Provider</InputLabel>
                   <Select
                     value={newAssessmentData.aiProvider}
                     name="aiProvider"
                     label="AI Provider"
-                    onChange={handleInputChange}
+                    onChange={(e) => {
+                      setNewAssessmentData(prev => ({
+                        ...prev,
+                        aiProvider: e.target.value as string
+                      }));
+                    }}
                   >
                     <MenuItem value="groq">Groq (Default)</MenuItem>
                     <MenuItem value="gemini">Google Gemini</MenuItem>

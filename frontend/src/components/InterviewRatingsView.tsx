@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Button, Rating, Typography, Box, Chip, Divider,
@@ -8,7 +8,7 @@ import StarIcon from '@mui/icons-material/Star';
 import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import TimerIcon from '@mui/icons-material/Timer';
-import { formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 
 interface RatingCategory {
   name: string;
@@ -46,7 +46,15 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
   ratings,
   candidateName
 }) => {
+  useEffect(() => {
+    if (open) {
+      console.log(`[CandidateRating] Viewing ratings for candidate ${candidateName}`);
+      console.log(`[CandidateRating] Found ${ratings.length} ratings to display`);
+    }
+  }, [open, ratings, candidateName]);
+
   if (!ratings.length) {
+    console.log(`[CandidateRating] No ratings found for candidate ${candidateName}`);
     return null;
   }
 
@@ -68,6 +76,8 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
 
   // Calculate average ratings
   const calculateAverages = () => {
+    console.log(`[CandidateRating] Calculating average ratings from ${ratings.length} ratings`);
+    
     const sum = {
       overall: 0,
       technical: 0,
@@ -111,19 +121,29 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
       }
     });
     
-    return {
+    const result = {
       overall: count.overall ? Math.round((sum.overall / count.overall) * 10) / 10 : 0,
       technical: count.technical ? Math.round((sum.technical / count.technical) * 10) / 10 : null,
       communication: count.communication ? Math.round((sum.communication / count.communication) * 10) / 10 : null,
       cultural: count.cultural ? Math.round((sum.cultural / count.cultural) * 10) / 10 : null,
       problemSolving: count.problemSolving ? Math.round((sum.problemSolving / count.problemSolving) * 10) / 10 : null
     };
+    
+    console.log(`[CandidateRating] Average ratings calculated - Overall: ${result.overall}`);
+    if (result.technical) console.log(`[CandidateRating] Technical: ${result.technical}`);
+    if (result.communication) console.log(`[CandidateRating] Communication: ${result.communication}`);
+    if (result.cultural) console.log(`[CandidateRating] Cultural Fit: ${result.cultural}`);
+    if (result.problemSolving) console.log(`[CandidateRating] Problem Solving: ${result.problemSolving}`);
+    
+    return result;
   };
 
   const averages = calculateAverages();
 
   // Collect all strengths and weaknesses
   const aggregateStrengthsAndWeaknesses = () => {
+    console.log(`[CandidateRating] Aggregating strengths and weaknesses from all ratings`);
+    
     const allStrengths: { [key: string]: number } = {};
     const allWeaknesses: { [key: string]: number } = {};
     
@@ -137,7 +157,7 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
       });
     });
     
-    return {
+    const result = {
       strengths: Object.entries(allStrengths)
         .map(([text, count]) => ({ text, count }))
         .sort((a, b) => b.count - a.count),
@@ -145,14 +165,23 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
         .map(([text, count]) => ({ text, count }))
         .sort((a, b) => b.count - a.count)
     };
+    
+    console.log(`[CandidateRating] Found ${result.strengths.length} unique strengths and ${result.weaknesses.length} unique weaknesses`);
+    
+    return result;
   };
 
   const { strengths, weaknesses } = aggregateStrengthsAndWeaknesses();
 
+  const handleClose = () => {
+    console.log(`[CandidateRating] Closing ratings view for candidate ${candidateName}`);
+    onClose();
+  };
+
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       maxWidth="md"
       fullWidth
     >
@@ -163,12 +192,12 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
       <DialogContent dividers>
         <Grid container spacing={3}>
           {/* Summary Section */}
-          <Grid item xs={12}>
+          <Grid sx={{ gridColumn: 'span 12' }}>
             <Paper elevation={0} variant="outlined" sx={{ p: 2, mb: 3 }}>
               <Typography variant="h6" gutterBottom>Rating Summary</Typography>
               
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid sx={{ gridColumn: 'span 12', sm: 'span 6' }}>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2" color="text.secondary">
                       Overall Rating
@@ -192,7 +221,7 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
                 </Grid>
                 
                 {/* Category Ratings */}
-                <Grid item xs={12} sm={6}>
+                <Grid sx={{ gridColumn: 'span 12', sm: 'span 6' }}>
                   <Grid container spacing={1}>
                     {[
                       { name: 'Technical Skills', value: averages.technical },
@@ -201,7 +230,7 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
                       { name: 'Problem Solving', value: averages.problemSolving }
                     ].map((category: RatingCategory) => (
                       category.value ? (
-                        <Grid item xs={6} key={category.name}>
+                        <Grid sx={{ gridColumn: 'span 6' }} key={category.name}>
                           <Typography variant="body2" color="text.secondary">
                             {category.name}
                           </Typography>
@@ -226,7 +255,7 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
           </Grid>
           
           {/* Strengths & Weaknesses */}
-          <Grid item xs={12} sm={6}>
+          <Grid sx={{ gridColumn: 'span 12', sm: 'span 6' }}>
             <Typography variant="h6" gutterBottom>Key Strengths</Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               {strengths.map(({ text, count }) => (
@@ -247,7 +276,7 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
             </Box>
           </Grid>
           
-          <Grid item xs={12} sm={6}>
+          <Grid sx={{ gridColumn: 'span 12', sm: 'span 6' }}>
             <Typography variant="h6" gutterBottom>Areas for Improvement</Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               {weaknesses.map(({ text, count }) => (
@@ -269,7 +298,7 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
           </Grid>
           
           {/* Individual Ratings */}
-          <Grid item xs={12}>
+          <Grid sx={{ gridColumn: 'span 12' }}>
             <Divider sx={{ my: 2 }} />
             <Typography variant="h6" gutterBottom>Interview Feedback</Typography>
             
@@ -294,7 +323,7 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
                           <Box display="flex" alignItems="center">
                             <TimerIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
                             <Typography variant="caption" color="text.secondary">
-                              {formatDistanceToNow(new Date(rating.createdAt), { addSuffix: true })}
+                              {format(new Date(rating.createdAt), 'PPp')}
                             </Typography>
                           </Box>
                         </Box>
@@ -313,7 +342,7 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
                         
                         <Grid container spacing={2} sx={{ mt: 1 }}>
                           {rating.strengths.length > 0 && (
-                            <Grid item xs={12} sm={6}>
+                            <Grid sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
                               <Typography variant="caption" color="success.main">
                                 Strengths:
                               </Typography>
@@ -328,7 +357,7 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
                           )}
                           
                           {rating.weaknesses.length > 0 && (
-                            <Grid item xs={12} sm={6}>
+                            <Grid sx={{ gridColumn: { xs: 'span 12', sm: 'span 6' } }}>
                               <Typography variant="caption" color="error.main">
                                 Areas for Improvement:
                               </Typography>
@@ -353,7 +382,7 @@ const InterviewRatingsView: React.FC<InterviewRatingsViewProps> = ({
       </DialogContent>
       
       <DialogActions>
-        <Button onClick={onClose}>
+        <Button onClick={handleClose}>
           Close
         </Button>
       </DialogActions>

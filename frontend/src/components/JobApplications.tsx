@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Box,
     Typography,
     Card,
     CardContent,
-    Grid,
     Button,
     Chip,
     CircularProgress,
@@ -17,7 +16,6 @@ import {
     InputLabel,
     IconButton,
     Tooltip,
-    Rating,
     LinearProgress,
     Paper,
     Tabs,
@@ -27,28 +25,29 @@ import {
     InputAdornment,
     Slider,
     Switch,
-    FormControlLabel
+    FormControlLabel,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    List,
+    ListItem,
+    ListItemText
 } from '@mui/material';
 import { jobService, applicationService } from '../services/api';
 import { Job, JobApplication } from '../types';
 import { useAuth } from '../context/AuthContext';
 // Import icons
-import PersonIcon from '@mui/icons-material/Person';
-import BusinessIcon from '@mui/icons-material/Business';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import SearchIcon from '@mui/icons-material/Search';
 import SortIcon from '@mui/icons-material/Sort';
 import MessageIcon from '@mui/icons-material/Message';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
-import VideoCallIcon from '@mui/icons-material/VideoCall';
 import LeaderboardIcon from '@mui/icons-material/Leaderboard';
 import StarIcon from '@mui/icons-material/Star';
 import RateReviewIcon from '@mui/icons-material/RateReview';
-import VisibilityIcon from '@mui/icons-material/Visibility';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 // Import components
 import CandidateAnalysis from './CandidateAnalysis';
 import CandidateRankingVisual from './CandidateRankingVisual';
@@ -62,15 +61,18 @@ interface AIScreeningResult {
     candidates: {
         applicationId: string;
         candidate: {
-            id: string;
+            _id: string;
+            id?: string;
             name: string;
             email?: string;
+            title?: string;
+            skills?: string[];
+            totalYearsExperience?: number;
         };
         matchScore: number;
         strengths?: string[];
-        gaps?: string[];
-        explanation?: string;
-        feedback?: string;
+        weaknesses?: string[];
+        reasoning?: string;
         appliedAt: string;
         status: string;
     }[];
@@ -94,12 +96,15 @@ const JobApplications: React.FC = () => {
     const [applicationForInterview, setApplicationForInterview] = useState<string>('');
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     
+    // Cover Letter Modal State
+    const [coverLetterModalOpen, setCoverLetterModalOpen] = useState(false);
+    const [selectedCoverLetter, setSelectedCoverLetter] = useState('');
+    
     // Enhanced UI state
     const [tabValue, setTabValue] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
     const [minMatchScore, setMinMatchScore] = useState(0);
     const [sortOption, setSortOption] = useState('matchScore');
-    const [showRankedView, setShowRankedView] = useState(false);
     const [useFallback, setUseFallback] = useState(false);
     const [showVisualRanking, setShowVisualRanking] = useState(false);
     
@@ -110,74 +115,59 @@ const JobApplications: React.FC = () => {
     const [candidateForRating, setCandidateForRating] = useState<string | null>(null);
     const [interviewRatings, setInterviewRatings] = useState<any[]>([]);
     
-    useEffect(() => {
-        if (id) {
-            fetchJobAndApplications(id);
-        }
-    }, [id]);
-
-    const fetchJobAndApplications = async (jobId: string) => {
+    const fetchJobAndApplications = useCallback(async () => {
+        if (!id) return;
+        setLoading(true);
+        setError('');
         try {
-            setLoading(true);
             const [jobData, applicationsData] = await Promise.all([
-                jobService.getJobById(jobId),
-                applicationService.getJobApplications(jobId)
+                jobService.getJobById(id),
+                applicationService.getJobApplications(id)
             ]);
             setJob(jobData);
             setApplications(applicationsData);
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to fetch job applications');
+            console.error('Error fetching job applications:', err);
+            setError(err.response?.data?.message || 'Failed to load job applications');
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
+
+    useEffect(() => {
+        fetchJobAndApplications();
+    }, [fetchJobAndApplications]);
 
     const handleStatusChange = async (applicationId: string, status: string) => {
         try {
-            await applicationService.updateApplicationStatus(applicationId, status);
-            if (id) {
-                // Refresh applications after status update
-                const data = await applicationService.getJobApplications(id);
-                setApplications(data);
-                
-                // Also update status in screening results if available
-                if (screeningResults) {
-                    setScreeningResults(prevResults => {
-                        if (!prevResults) return null;
-                        
-                        return {
-                            ...prevResults,
-                            candidates: prevResults.candidates.map(candidate => 
-                                candidate.applicationId === applicationId 
-                                ? { ...candidate, status } 
-                                : candidate
-                            )
-                        };
-                    });
-                }
+            const updatedApplication = await applicationService.updateApplicationStatus(applicationId, status);
+            setApplications(prev => 
+                prev.map(app => app._id === applicationId ? updatedApplication : app)
+            );
+            
+            if (screeningResults) {
+                setScreeningResults(prevResults => {
+                    if (!prevResults) return null;
+                    
+                    return {
+                        ...prevResults,
+                        candidates: prevResults.candidates.map(candidate => 
+                            candidate.applicationId === applicationId 
+                            ? { ...candidate, status } 
+                            : candidate
+                        )
+                    };
+                });
             }
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to update application status');
-        }
-    };
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'accepted':
-                return 'success';
-            case 'rejected':
-                return 'error';
-            case 'reviewed':
-                return 'info';
-            case 'interview':
-                return 'secondary';
-            default:
-                return 'default';
+            console.error('Error updating status:', err);
+            setError('Failed to update application status');
         }
     };
 
     // Add a handler for messaging the job seeker
     const handleMessageJobSeeker = (userId: string) => {
+        console.log(`[JobApplications] Employer initiating chat with Job Seeker ID: ${userId}`);
         navigate(`/messages/${userId}`);
     };
 
@@ -195,7 +185,7 @@ const JobApplications: React.FC = () => {
             setScreeningResults(data);
             
             // Automatically switch to ranked view when screening is complete
-            setShowRankedView(true);
+            setShowVisualRanking(true);
         } catch (err: any) {
             setError(err.message || 'Failed to screen candidates');
         } finally {
@@ -213,6 +203,17 @@ const JobApplications: React.FC = () => {
         setSelectedApplicationId(null);
     };
 
+    // Cover Letter Modal Handlers
+    const handleOpenCoverLetter = (letter: string) => {
+        setSelectedCoverLetter(letter);
+        setCoverLetterModalOpen(true);
+    };
+
+    const handleCloseCoverLetter = () => {
+        setCoverLetterModalOpen(false);
+        setSelectedCoverLetter(''); // Clear content when closing
+    };
+
     // Handle opening interview scheduling dialog
     const handleOpenInterviewDialog = (applicationId: string) => {
         setApplicationForInterview(applicationId);
@@ -226,7 +227,7 @@ const JobApplications: React.FC = () => {
         
         // Refresh applications to show updated status
         if (id) {
-            fetchJobAndApplications(id);
+            fetchJobAndApplications();
         }
     };
 
@@ -247,8 +248,8 @@ const JobApplications: React.FC = () => {
         if (!screeningResults) return [];
         
         let filtered = screeningResults.candidates.filter(candidate => 
-            // Filter by search term
-            candidate.candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+            // Filter by search term (using optional chaining for safety)
+            (candidate.candidate?.name?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) &&
             // Filter by minimum match score
             candidate.matchScore >= minMatchScore
         );
@@ -259,10 +260,17 @@ const JobApplications: React.FC = () => {
                 filtered.sort((a, b) => b.matchScore - a.matchScore);
                 break;
             case 'name':
-                filtered.sort((a, b) => a.candidate.name.localeCompare(b.candidate.name));
+                filtered.sort((a, b) => (a.candidate?.name ?? '').localeCompare(b.candidate?.name ?? ''));
                 break;
             case 'recent':
-                filtered.sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());
+                // Assuming appliedAt is a valid date string
+                try {
+                     filtered.sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());
+                } catch(e) {
+                    console.error("Error sorting by date:", e); 
+                    // Fallback to score sort if date parse fails
+                    filtered.sort((a, b) => b.matchScore - a.matchScore);
+                }
                 break;
             default:
                 filtered.sort((a, b) => b.matchScore - a.matchScore);
@@ -281,7 +289,7 @@ const JobApplications: React.FC = () => {
     // Handle successful rating submission
     const handleRatingSubmitted = async () => {
         setRatingDialogOpen(false);
-        await fetchJobAndApplications(id || '');
+        await fetchJobAndApplications();
         setSuccessMessage('Interview rating submitted successfully!');
         setTimeout(() => setSuccessMessage(null), 5000);
     };
@@ -300,6 +308,15 @@ const JobApplications: React.FC = () => {
             setLoading(false);
         }
     };
+
+    // Prepare data for visual ranking (mapping _id to id if needed)
+    const rankingData = screeningResults?.candidates.map(c => ({
+        ...c,
+        candidate: {
+            ...c.candidate,
+            id: c.candidate._id
+        }
+    }));
 
     if (loading) {
         return (
@@ -377,6 +394,122 @@ const JobApplications: React.FC = () => {
                 )}
             </Box>
 
+            {/* --- START: Display basic application list before screening --- */}
+            {!screeningResults && applications.length > 0 && (
+                <Box mb={3}>
+                    <Typography variant="h6" gutterBottom>
+                        Received Applications
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1) }}>
+                        {applications.map((app) => (
+                            <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', md: '50%' } }} key={app._id}>
+                                <Card variant="outlined">
+                                    <CardContent>
+                                        <Typography variant="h6">{app.jobSeeker.name}</Typography>
+                                        <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                                            Applied {new Date(app.appliedAt).toLocaleDateString()}
+                                            {app.jobSeeker.email && ` • ${app.jobSeeker.email}`}
+                                        </Typography>
+                                        
+                                        {/* Optional: Add link to resume if available */}
+                                        {app.resume && (
+                                            <Button 
+                                                size="small" 
+                                                href={app.resume} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                sx={{ mt: 1 }}
+                                            >
+                                                View Resume
+                                            </Button>
+                                        )}
+                                        {/* Add button to view cover letter */} 
+                                        {app.coverLetter && (
+                                            <Button 
+                                                size="small" 
+                                                onClick={() => handleOpenCoverLetter(app.coverLetter)}
+                                                sx={{ mt: 1, ml: app.resume ? 1 : 0 }} // Add margin if resume button exists
+                                            >
+                                                View Cover Letter
+                                            </Button>
+                                        )}
+
+                                        <Box mt={2} display="flex" justifyContent="space-between" alignItems="center">
+                                            <FormControl size="small" sx={{ minWidth: 120 }}>
+                                                <InputLabel>Status</InputLabel>
+                                                <Select
+                                                    value={app.status}
+                                                    label="Status"
+                                                    onChange={(e) => handleStatusChange(app._id, e.target.value)}
+                                                >
+                                                    <MenuItem value="pending">Pending</MenuItem>
+                                                    <MenuItem value="reviewed">Reviewed</MenuItem>
+                                                    <MenuItem value="interview">Interview</MenuItem>
+                                                    <MenuItem value="accepted">Accepted</MenuItem>
+                                                    <MenuItem value="rejected">Rejected</MenuItem>
+                                                </Select>
+                                            </FormControl>
+                                            
+                                            <Box>
+                                                {/* Message Button */}
+                                                <Tooltip title="Message Candidate">
+                                                    <IconButton 
+                                                        color="primary" 
+                                                        size="small"
+                                                        onClick={() => handleMessageJobSeeker(app.jobSeeker._id)}
+                                                        sx={{ mr: 1 }}
+                                                    >
+                                                        <MessageIcon />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                
+                                                {/* Schedule Interview Button */}
+                                                <Tooltip title="Schedule Interview">
+                                                    <IconButton
+                                                        color="secondary"
+                                                        size="small"
+                                                        onClick={() => handleOpenInterviewDialog(app._id)}
+                                                        sx={{ mr: 1 }}
+                                                    >
+                                                        <CalendarTodayIcon />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                
+                                                {/* Rate Candidate Button (for easier testing) */}
+                                                <Tooltip title="Rate Candidate">
+                                                    <IconButton
+                                                        color="success"
+                                                        size="small"
+                                                        onClick={() => handleOpenRatingDialog(app._id, app.jobSeeker.name)}
+                                                    >
+                                                        <StarIcon />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                
+                                                {/* View Ratings Button (only if ratings exist) */}
+                                                {app.interviewRatings && app.interviewRatings.length > 0 && (
+                                                    <Tooltip title="View Ratings">
+                                                        <IconButton
+                                                            color="info"
+                                                            size="small"
+                                                            onClick={() => handleViewRatings(app._id, app.jobSeeker.name)}
+                                                            sx={{ ml: 1 }}
+                                                        >
+                                                            <AssessmentIcon />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
+                                            </Box>
+                                        </Box>
+                                    </CardContent>
+                                </Card>
+                            </Box>
+                        ))}
+                    </Box>
+                </Box>
+            )}
+            {/* --- END: Basic application list --- */}
+
             {screeningResults && (
                 <>
                     <Paper sx={{ mb: 3 }}>
@@ -437,11 +570,14 @@ const JobApplications: React.FC = () => {
                     </Box>
                     
                     {showVisualRanking && screeningResults.candidates.length > 0 && (
-                        <CandidateRankingVisual 
-                            candidates={screeningResults.candidates}
-                            jobTitle={screeningResults.jobTitle}
-                            onSelectCandidate={handleViewDetailedAnalysis}
-                        />
+                        <Box sx={{ mt: 4 }}>
+                            <Typography variant="h6" gutterBottom>Visual Ranking</Typography>
+                            <CandidateRankingVisual 
+                                candidates={rankingData || []} 
+                                jobTitle={screeningResults.jobTitle}
+                                onSelectCandidate={handleViewDetailedAnalysis}
+                            />
+                        </Box>
                     )}
                     
                     <Box mb={3}>
@@ -512,7 +648,7 @@ const JobApplications: React.FC = () => {
                                 
                                 <Divider sx={{ my: 2 }} />
                                 
-                                <Grid container spacing={2}>
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1) }}>
                                     {getFilteredCandidates()
                                         .filter(candidate => {
                                             if (tabValue === 0) return candidate.matchScore >= 70;
@@ -520,7 +656,7 @@ const JobApplications: React.FC = () => {
                                             return candidate.matchScore < 50;
                                         })
                                         .map((candidate, index) => (
-                                            <Grid item xs={12} md={6} key={candidate.applicationId}>
+                                            <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', md: '50%' } }} key={candidate.applicationId}>
                                                 <Card variant="outlined" sx={{ 
                                                     position: 'relative',
                                                     borderLeft: 6,
@@ -565,41 +701,60 @@ const JobApplications: React.FC = () => {
                                                         </Typography>
                                                         
                                                         <Box mt={1.5}>
-                                                            {candidate.explanation && (
-                                                                <Typography variant="body2" paragraph>
-                                                                    {candidate.explanation}
-                                                                </Typography>
-                                                            )}
-                                                            
-                                                            {candidate.strengths && candidate.strengths.length > 0 && (
-                                                                <Box mb={1.5}>
-                                                                    <Typography variant="subtitle2" color="success.main">
-                                                                        Strengths:
-                                                                    </Typography>
-                                                                    <Box component="ul" sx={{ mt: 0.5, pl: 2.5 }}>
-                                                                        {candidate.strengths.map((strength, i) => (
-                                                                            <Typography component="li" variant="body2" key={i}>
-                                                                                {strength}
-                                                                            </Typography>
-                                                                        ))}
-                                                                    </Box>
+                                                            {/* Display AI Screening Results within the candidate card */}
+                                                            <Box mt={2} p={1.5} bgcolor="grey.100" borderRadius={1}>
+                                                                <Typography variant="subtitle2" gutterBottom>AI Analysis:</Typography>
+                                                                <Box display="flex" alignItems="center" mb={1}>
+                                                                    <Typography variant="body2" sx={{ mr: 1 }}>Match Score:</Typography>
+                                                                    <Chip 
+                                                                        label={`${candidate.matchScore}%`} 
+                                                                        size="small" 
+                                                                        sx={{ 
+                                                                            backgroundColor: getMatchScoreColor(candidate.matchScore), 
+                                                                            color: 'white',
+                                                                            fontWeight: 'bold' 
+                                                                        }} 
+                                                                    />
                                                                 </Box>
-                                                            )}
-                                                            
-                                                            {candidate.gaps && candidate.gaps.length > 0 && (
-                                                                <Box mb={1}>
-                                                                    <Typography variant="subtitle2" color="error.main">
-                                                                        Gaps:
-                                                                    </Typography>
-                                                                    <Box component="ul" sx={{ mt: 0.5, pl: 2.5 }}>
-                                                                        {candidate.gaps.map((gap, i) => (
-                                                                            <Typography component="li" variant="body2" key={i}>
-                                                                                {gap}
-                                                                            </Typography>
-                                                                        ))}
+                                                                
+                                                                {/* Strengths */}
+                                                                {candidate.strengths && candidate.strengths.length > 0 && (
+                                                                    <Box mb={1}>
+                                                                        <Typography variant="caption" display="block" color="text.secondary">Strengths:</Typography>
+                                                                        <List dense disablePadding sx={{ pl: 1 }}>
+                                                                            {candidate.strengths.map((strength, i) => (
+                                                                                <ListItem key={`strength-${i}`} sx={{ py: 0.2 }}>
+                                                                                    <ListItemText primary={`• ${strength}`} primaryTypographyProps={{ variant: 'body2' }} />
+                                                                                </ListItem>
+                                                                            ))}
+                                                                        </List>
                                                                     </Box>
-                                                                </Box>
-                                                            )}
+                                                                )}
+
+                                                                {/* Weaknesses */}
+                                                                {candidate.weaknesses && candidate.weaknesses.length > 0 && (
+                                                                    <Box mb={1}>
+                                                                        <Typography variant="caption" display="block" color="text.secondary">Areas for Development:</Typography>
+                                                                         <List dense disablePadding sx={{ pl: 1 }}>
+                                                                            {candidate.weaknesses.map((weakness, i) => (
+                                                                                <ListItem key={`weakness-${i}`} sx={{ py: 0.2 }}>
+                                                                                    <ListItemText primary={`• ${weakness}`} primaryTypographyProps={{ variant: 'body2' }} />
+                                                                                </ListItem>
+                                                                            ))}
+                                                                        </List>
+                                                                    </Box>
+                                                                )}
+
+                                                                {/* Reasoning */}
+                                                                {candidate.reasoning && (
+                                                                     <Tooltip title={candidate.reasoning} arrow placement="top">
+                                                                         <Typography variant="caption" color="text.secondary" sx={{ cursor: 'help' }}>
+                                                                             AI Reasoning (?)
+                                                                         </Typography>
+                                                                     </Tooltip>
+                                                                )}
+                                                            </Box>
+                                                            {/* End AI Screening Results */}
                                                         </Box>
                                                         
                                                         <Box mt={2} display="flex" justifyContent="space-between" alignItems="center">
@@ -633,7 +788,7 @@ const JobApplications: React.FC = () => {
                                                                     <IconButton 
                                                                         color="primary" 
                                                                         size="small"
-                                                                        onClick={() => handleMessageJobSeeker(candidate.candidate.id)}
+                                                                        onClick={() => handleMessageJobSeeker(candidate.candidate._id)}
                                                                         sx={{ mr: 1 }}
                                                                     >
                                                                         <MessageIcon />
@@ -677,7 +832,7 @@ const JobApplications: React.FC = () => {
                                                         </Box>
                                                     </CardContent>
                                                 </Card>
-                                            </Grid>
+                                            </Box>
                                         ))}
                                         
                                     {getFilteredCandidates().filter(candidate => {
@@ -685,13 +840,13 @@ const JobApplications: React.FC = () => {
                                         if (tabValue === 1) return candidate.matchScore < 70 && candidate.matchScore >= 50;
                                         return candidate.matchScore < 50;
                                     }).length === 0 && (
-                                        <Grid item xs={12}>
+                                        <Box sx={{ padding: theme => theme.spacing(1), width: '100%' }}>
                                             <Alert severity="info">
                                                 No candidates match the current filters. Try adjusting your filter criteria.
                                             </Alert>
-                                        </Grid>
+                                        </Box>
                                     )}
-                                </Grid>
+                                </Box>
                             </CardContent>
                         </Card>
                     </Box>
@@ -754,6 +909,19 @@ const JobApplications: React.FC = () => {
                     candidateName={candidateForRating}
                 />
             )}
+
+            {/* Cover Letter Display Dialog */} 
+            <Dialog open={coverLetterModalOpen} onClose={handleCloseCoverLetter} maxWidth="md" fullWidth>
+                <DialogTitle>Cover Letter</DialogTitle>
+                <DialogContent dividers>
+                    <Typography whiteSpace="pre-wrap"> 
+                        {selectedCoverLetter || "No cover letter provided."} 
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseCoverLetter}>Close</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

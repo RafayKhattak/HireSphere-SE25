@@ -10,7 +10,6 @@ import {
     Paper,
     Alert,
     Snackbar,
-    Grid
 } from '@mui/material';
 import axios from 'axios';
 
@@ -145,8 +144,8 @@ const PostJob = () => {
                         <MenuItem value="internship">Internship</MenuItem>
                     </TextField>
 
-                    <Grid container spacing={2} sx={{ mt: 1 }}>
-                        <Grid item xs={12} sm={6}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', margin: theme => theme.spacing(-1), mt: 1 }}>
+                        <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
                             <TextField
                                 fullWidth
                                 required
@@ -157,8 +156,8 @@ const PostJob = () => {
                                 onChange={handleChange}
                                 placeholder="e.g. 50000"
                             />
-                        </Grid>
-                        <Grid item xs={12} sm={6}>
+                        </Box>
+                        <Box sx={{ padding: theme => theme.spacing(1), width: { xs: '100%', sm: '50%' } }}>
                             <TextField
                                 fullWidth
                                 required
@@ -169,8 +168,8 @@ const PostJob = () => {
                                 onChange={handleChange}
                                 placeholder="e.g. 100000"
                             />
-                        </Grid>
-                    </Grid>
+                        </Box>
+                    </Box>
 
                     <TextField
                         fullWidth

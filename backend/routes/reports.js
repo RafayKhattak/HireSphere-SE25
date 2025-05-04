@@ -60,7 +60,7 @@ router.post(
       const existingReport = await Report.findOne({
         entityType,
         entityId,
-        reportedBy: req.user.id
+        reporter: req.user.id
       });
 
       if (existingReport) {
@@ -74,8 +74,8 @@ router.post(
         entityType,
         entityId,
         reason,
-        description,
-        reportedBy: req.user.id
+        details: description,
+        reporter: req.user.id
       });
 
       await newReport.save();
@@ -96,7 +96,7 @@ router.post(
 // @access  Private
 router.get('/me', auth, async (req, res) => {
   try {
-    const reports = await Report.find({ reportedBy: req.user.id })
+    const reports = await Report.find({ reporter: req.user.id })
       .sort({ createdAt: -1 })
       .populate('entityId', 'title company name email');
 
@@ -114,6 +114,9 @@ router.get('/', [auth, admin], async (req, res) => {
   try {
     const { status, entityType, page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
+    
+    console.log(`[FraudManagement] Admin ${req.user.email} requesting reports list`);
+    console.log(`[FraudManagement] Query parameters: ${JSON.stringify({ status, entityType, page, limit })}`);
     
     // Build query
     const query = {};
@@ -134,6 +137,8 @@ router.get('/', [auth, admin], async (req, res) => {
     // Get total count for pagination
     const totalReports = await Report.countDocuments(query);
     
+    console.log(`[FraudManagement] Retrieved ${reports.length} reports (${totalReports} total)`);
+    
     res.json({
       reports,
       pagination: {
@@ -143,129 +148,12 @@ router.get('/', [auth, admin], async (req, res) => {
       }
     });
   } catch (err) {
-    console.error(err.message);
+    console.error(`[FraudManagement] Error fetching reports: ${err.message}`);
     res.status(500).send('Server Error');
   }
 });
 
-// @route   GET /api/reports/:id
-// @desc    Get report by ID
-// @access  Admin
-router.get('/:id', [auth, admin], async (req, res) => {
-  try {
-    const report = await Report.findById(req.params.id)
-      .populate('reporter', 'name email role')
-      .populate({
-        path: 'entityId'
-      });
-    
-    if (!report) {
-      return res.status(404).json({ msg: 'Report not found' });
-    }
-    
-    res.json(report);
-  } catch (err) {
-    console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Report not found' });
-    }
-    res.status(500).send('Server Error');
-  }
-});
-
-// @route   PUT /api/reports/:id
-// @desc    Update report status and take action
-// @access  Admin
-router.put('/:id', [auth, admin], async (req, res) => {
-  try {
-    const { status, adminNotes, actionTaken } = req.body;
-    
-    // Find report
-    const report = await Report.findById(req.params.id);
-    
-    if (!report) {
-      return res.status(404).json({ msg: 'Report not found' });
-    }
-    
-    // Update report
-    if (status) report.status = status;
-    if (adminNotes) report.adminNotes = adminNotes;
-    if (actionTaken) report.actionTaken = actionTaken;
-    
-    // Take action on the entity
-    if (actionTaken && actionTaken !== 'none') {
-      // Get the entity
-      let entity;
-      if (report.entityType === 'Job') {
-        entity = await Job.findById(report.entityId);
-      } else if (report.entityType === 'User') {
-        entity = await User.findById(report.entityId);
-      }
-      
-      if (!entity) {
-        return res.status(404).json({ msg: 'Entity not found' });
-      }
-      
-      // Apply action
-      switch (actionTaken) {
-        case 'warning':
-          // This might involve sending an email or adding a warning flag
-          // Implementation depends on business requirements
-          break;
-        case 'disabled':
-          // Disable the job or user account
-          if (report.entityType === 'Job') {
-            entity.status = 'closed';
-          } else if (report.entityType === 'User') {
-            entity.status = 'disabled';
-          }
-          await entity.save();
-          break;
-        case 'deleted':
-          // Delete the job or deactivate the user
-          if (report.entityType === 'Job') {
-            await Job.findByIdAndDelete(report.entityId);
-          } else if (report.entityType === 'User') {
-            entity.status = 'deactivated';
-            await entity.save();
-          }
-          break;
-      }
-    }
-    
-    await report.save();
-    
-    res.json(report);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-// @route   DELETE /api/reports/:id
-// @desc    Delete a report
-// @access  Admin
-router.delete('/:id', [auth, admin], async (req, res) => {
-  try {
-    const report = await Report.findById(req.params.id);
-    
-    if (!report) {
-      return res.status(404).json({ msg: 'Report not found' });
-    }
-    
-    await report.remove();
-    
-    res.json({ msg: 'Report removed' });
-  } catch (err) {
-    console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Report not found' });
-    }
-    res.status(500).send('Server Error');
-  }
-});
-
-// @route   GET /api/reports/statistics
+// @route   GET /api/reports/statistics/summary
 // @desc    Get report statistics
 // @access  Admin
 router.get('/statistics/summary', [auth, admin], async (req, res) => {
@@ -293,6 +181,141 @@ router.get('/statistics/summary', [auth, admin], async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// @route   GET /api/reports/:id
+// @desc    Get report by ID
+// @access  Admin
+router.get('/:id', [auth, admin], async (req, res) => {
+  try {
+    console.log(`[FraudManagement] Admin ${req.user.email} requesting report details for ID: ${req.params.id}`);
+    
+    const report = await Report.findById(req.params.id)
+      .populate('reporter', 'name email role')
+      .populate({
+        path: 'entityId'
+      });
+    
+    if (!report) {
+      console.log(`[FraudManagement] Report not found with ID: ${req.params.id}`);
+      return res.status(404).json({ msg: 'Report not found' });
+    }
+    
+    console.log(`[FraudManagement] Successfully retrieved report: ${report.entityType} - ${report.reason}`);
+    res.json(report);
+  } catch (err) {
+    console.error(`[FraudManagement] Error fetching report: ${err.message}`);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Report not found' });
+    }
+    res.status(500).send('Server Error');
+  }
+});
+
+// @route   PUT /api/reports/:id
+// @desc    Update report status and take action
+// @access  Admin
+router.put('/:id', [auth, admin], async (req, res) => {
+  try {
+    const { status, adminNotes, actionTaken } = req.body;
+    
+    console.log(`[FraudManagement] Admin ${req.user.email} updating report ID: ${req.params.id}`);
+    console.log(`[FraudManagement] Update data: status=${status}, action=${actionTaken}`);
+    
+    // Find report
+    const report = await Report.findById(req.params.id);
+    
+    if (!report) {
+      console.log(`[FraudManagement] Report not found with ID: ${req.params.id}`);
+      return res.status(404).json({ msg: 'Report not found' });
+    }
+    
+    // Update report
+    if (status) report.status = status;
+    if (adminNotes) report.adminNotes = adminNotes;
+    if (actionTaken) report.actionTaken = actionTaken;
+    
+    // Take action on the entity
+    if (actionTaken && actionTaken !== 'none') {
+      // Get the entity
+      let entity;
+      if (report.entityType === 'Job') {
+        entity = await Job.findById(report.entityId);
+      } else if (report.entityType === 'User') {
+        entity = await User.findById(report.entityId);
+      }
+      
+      if (!entity) {
+        console.log(`[FraudManagement] Entity not found: ${report.entityType} - ${report.entityId}`);
+        return res.status(404).json({ msg: 'Entity not found' });
+      }
+      
+      console.log(`[FraudManagement] Taking action '${actionTaken}' on ${report.entityType}: ${report.entityId}`);
+      
+      // Apply action
+      switch (actionTaken) {
+        case 'warning':
+          // This might involve sending an email or adding a warning flag
+          console.log(`[FraudManagement] Warning issued to ${report.entityType}: ${report.entityId}`);
+          // Implementation depends on business requirements
+          break;
+        case 'disabled':
+          // Disable the job or user account
+          if (report.entityType === 'Job') {
+            console.log(`[FraudManagement] Disabling job listing: ${entity.title}`);
+            entity.status = 'closed';
+          } else if (report.entityType === 'User') {
+            console.log(`[FraudManagement] Disabling user account: ${entity.email}`);
+            entity.status = 'disabled';
+          }
+          await entity.save();
+          break;
+        case 'deleted':
+          // Delete the job or deactivate the user
+          if (report.entityType === 'Job') {
+            console.log(`[FraudManagement] Deleting job listing: ${entity.title} (ID: ${entity._id})`);
+            await Job.findByIdAndDelete(report.entityId);
+          } else if (report.entityType === 'User') {
+            console.log(`[FraudManagement] Deactivating user account: ${entity.email}`);
+            entity.status = 'deactivated';
+            await entity.save();
+          }
+          break;
+      }
+    }
+    
+    // Save the report with updates
+    await report.save();
+    
+    console.log(`[FraudManagement] Report updated successfully: ${report._id}`);
+    res.json({ msg: 'Report updated successfully', report });
+  } catch (err) {
+    console.error(`[FraudManagement] Error updating report: ${err.message}`);
+    res.status(500).send('Server Error');
+  }
+});
+
+// @route   DELETE /api/reports/:id
+// @desc    Delete a report
+// @access  Admin
+router.delete('/:id', [auth, admin], async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id);
+    
+    if (!report) {
+      return res.status(404).json({ msg: 'Report not found' });
+    }
+    
+    await report.remove();
+    
+    res.json({ msg: 'Report removed' });
+  } catch (err) {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Report not found' });
+    }
     res.status(500).send('Server Error');
   }
 });

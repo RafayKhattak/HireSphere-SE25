@@ -9,7 +9,9 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { body, validationResult } = require('express-validator');
-const { GoogleGenerativeAI } = require('@google/genai');
+
+// Import the Google AI SDK
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // Configure multer for memory storage (not file system)
 const storage = multer.memoryStorage();
@@ -37,7 +39,8 @@ const upload = multer({
 });
 
 // Initialize Google Gemini API
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIzaSyCKDyoST4sGKHYCNoTunjhQKk6VCXcB1fk");
+const apiKey = process.env.GEMINI_API_KEY || "AIzaSyCKDyoST4sGKHYCNoTunjhQKk6VCXcB1fk";
+const genAI = new GoogleGenerativeAI(apiKey);
 const geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
 // @route   GET /api/employer/profile
@@ -74,6 +77,8 @@ router.put('/profile', auth, async (req, res) => {
         }
 
         const {
+            name,
+            phone,
             company,
             companyDescription,
             website,
@@ -89,6 +94,8 @@ router.put('/profile', auth, async (req, res) => {
         // Build profile update object
         const profileFields = {};
         
+        if (name) profileFields.name = name;
+        if (phone) profileFields.phone = phone;
         if (company) profileFields.company = company;
         if (companyDescription) profileFields.companyDescription = companyDescription;
         if (website) profileFields.website = website;
@@ -180,9 +187,11 @@ router.get('/dashboard', auth, async (req, res) => {
 // @desc    Get analytics for a specific job
 // @access  Private (employer only)
 router.get('/jobs/:jobId/analytics', auth, async (req, res) => {
+    console.log(`[JobAnalytics] Request received for job ID: ${req.params.jobId} from user ID: ${req.user.id}`);
     try {
         // Ensure user is an employer
         if (req.user.type !== 'employer') {
+            console.log(`[JobAnalytics] Access denied - user type is ${req.user.type}, not employer`);
             return res.status(403).json({ message: 'Access denied. Only employers can access job analytics.' });
         }
 
@@ -191,16 +200,21 @@ router.get('/jobs/:jobId/analytics', auth, async (req, res) => {
         // Check if job exists and belongs to this employer
         const job = await Job.findById(jobId);
         if (!job) {
+            console.log(`[JobAnalytics] Job not found with ID: ${jobId}`);
             return res.status(404).json({ message: 'Job not found' });
         }
         
         if (job.employer.toString() !== req.user.id) {
+            console.log(`[JobAnalytics] Authorization failure - job belongs to ${job.employer.toString()}, not ${req.user.id}`);
             return res.status(403).json({ message: 'Not authorized to view analytics for this job' });
         }
+        
+        console.log(`[JobAnalytics] Fetching analytics for job: "${job.title}" (ID: ${jobId})`);
         
         // Get analytics for this job
         const analytics = await JobAnalytics.findOne({ job: jobId });
         if (!analytics) {
+            console.log(`[JobAnalytics] No analytics record found for job ID: ${jobId}, returning default empty values`);
             return res.json({
                 views: 0,
                 uniqueViews: 0,
@@ -212,9 +226,30 @@ router.get('/jobs/:jobId/analytics', auth, async (req, res) => {
             });
         }
         
+        console.log(`[JobAnalytics] Retrieved analytics - Views: ${analytics.views}, Applications: ${analytics.applications}`);
+        
+        // Log additional data for debugging
+        if (analytics.dailyStats && analytics.dailyStats.length > 0) {
+            const latestDate = new Date(Math.max(...analytics.dailyStats.map(stat => new Date(stat.date).getTime())));
+            console.log(`[JobAnalytics] Daily stats available from ${analytics.dailyStats.length} days, most recent: ${latestDate.toISOString().split('T')[0]}`);
+        }
+        
+        if (analytics.demographics && analytics.demographics.locations) {
+            const locationsCount = analytics.demographics.locations.length;
+            console.log(`[JobAnalytics] Demographics include ${locationsCount} distinct locations`);
+            if (locationsCount > 0) {
+                // Sort locations by count and get top locations
+                const topLocations = [...analytics.demographics.locations]
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 3)
+                    .map(loc => `${loc.location} (${loc.count})`);
+                console.log(`[JobAnalytics] Top locations: ${topLocations.join(', ')}`);
+            }
+        }
+        
         return res.json(analytics);
     } catch (error) {
-        console.error('Error fetching job analytics:', error);
+        console.error('[JobAnalytics] Error fetching job analytics:', error);
         return res.status(500).json({ message: 'Server error' });
     }
 });
@@ -499,9 +534,13 @@ router.get('/profile-image/:id', async (req, res) => {
 // @desc    Search for candidates based on skills and experience
 // @access  Private (employer only)
 router.get('/search/candidates', auth, async (req, res) => {
+    // Added log: Start of request
+    console.log(`[Candidate Search] Received request from employer ${req.user.id}. Query:`, req.query);
     try {
         // Ensure user is an employer
         if (req.user.type !== 'employer') {
+            // Added log: Access denied
+            console.log(`[Candidate Search] Access denied for user ${req.user.id} (not an employer).`);
             return res.status(403).json({ message: 'Access denied. Only employers can search for candidates.' });
         }
 
@@ -512,8 +551,14 @@ router.get('/search/candidates', auth, async (req, res) => {
         
         // Add skills to search query if provided
         if (skills) {
-            const skillsArray = skills.split(',').map(skill => skill.trim());
-            searchQuery.skills = { $in: skillsArray };
+            const skillsArray = skills.split(',').map(skill => skill.trim()).filter(Boolean); // Filter out empty strings
+            // Added log: Log the skills array before creating regex
+            console.log(`[Candidate Search] Filtered skills array:`, skillsArray);
+            if (skillsArray.length > 0) { // Only add skills query if array is not empty
+                searchQuery.skills = { $in: skillsArray.map(skill => new RegExp(`^${skill}$`, 'i')) };
+            } else {
+                 console.log(`[Candidate Search] Skills query skipped as skills array was empty after trim/filter.`);
+            }
         }
         
         // Add location to search query if provided
@@ -521,41 +566,33 @@ router.get('/search/candidates', auth, async (req, res) => {
             searchQuery.location = { $regex: location, $options: 'i' };
         }
         
-        // Base query to find job seekers with public profiles
-        let candidates = await User.find(searchQuery)
-            .select('firstName lastName title skills education experience location profileImage')
-            .sort({ createdAt: -1 });
-        
-        // If experience filter is provided, filter results manually 
-        // (since experience is an array of objects with various properties)
+        // Added log: Constructed MongoDB query (before experience filter)
+        console.log(`[Candidate Search] Base MongoDB Query:`, JSON.stringify(searchQuery));
+
+        // Add experience filter directly to the MongoDB query if provided
         if (experience) {
             const experienceYears = parseInt(experience);
-            if (!isNaN(experienceYears)) {
-                // Filter candidates with at least the specified years of experience
-                candidates = candidates.filter(candidate => {
-                    if (!candidate.experience || !Array.isArray(candidate.experience)) {
-                        return false;
-                    }
-                    
-                    // Calculate total years of experience across all positions
-                    let totalExperience = 0;
-                    candidate.experience.forEach(exp => {
-                        const startYear = exp.startDate ? new Date(exp.startDate).getFullYear() : 0;
-                        const endYear = exp.current ? new Date().getFullYear() : 
-                                      (exp.endDate ? new Date(exp.endDate).getFullYear() : 0);
-                        
-                        if (startYear && endYear) {
-                            totalExperience += (endYear - startYear);
-                        }
-                    });
-                    
-                    return totalExperience >= experienceYears;
-                });
+            if (!isNaN(experienceYears) && experienceYears >= 0) {
+                 // Query the new numeric field
+                searchQuery.totalYearsExperience = { $gte: experienceYears }; 
+                console.log(`[Candidate Search] Added experience filter to query: totalYearsExperience >= ${experienceYears}`);
+            } else {
+                console.log(`[Candidate Search] Invalid or no experience year value provided: ${experience}. Skipping experience filter.`);
             }
         }
 
-        // If AI-enhanced search is requested, use Gemini to rank candidates
+        // Execute the final query
+        let candidates = await User.find(searchQuery)
+            .select('firstName lastName title skills education experience location profileImage totalYearsExperience') // Select the new field too
+            .sort({ createdAt: -1 })
+            .lean(); 
+        
+        // Added log: Number of candidates found after ALL filters
+        console.log(`[Candidate Search] Found ${candidates.length} candidates matching final query.`);
+
+        // If AI-enhanced search is requested...
         if (useAI === 'true' && candidates.length > 0) {
+             console.log(`[Candidate Search] Attempting AI-enhanced ranking for ${candidates.length} candidates...`);
             try {
                 // Get the employer's active job listings for context
                 const employerJobs = await Job.find({ employer: req.user.id, active: true })
@@ -626,7 +663,7 @@ router.get('/search/candidates', auth, async (req, res) => {
                             if (candidateIndex >= 0 && candidateIndex < candidates.length) {
                                 const candidate = candidates[candidateIndex];
                                 rankedCandidates.push({
-                                    ...candidate.toObject(),
+                                    ...candidate, // Remove .toObject() as candidate is already a plain object due to .lean()
                                     matchScore: ranking.matchScore || 0,
                                     strengths: ranking.strengths || [],
                                     gaps: ranking.gaps || []
@@ -634,6 +671,8 @@ router.get('/search/candidates', auth, async (req, res) => {
                             }
                         });
                         
+                        // Added log: Successful AI ranking
+                        console.log(`[Candidate Search] AI ranking applied. Returning ${rankedCandidates.length} ranked candidates.`);
                         return res.json({
                             candidates: rankedCandidates,
                             totalCount: rankedCandidates.length,
@@ -642,23 +681,28 @@ router.get('/search/candidates', auth, async (req, res) => {
                     }
                 } catch (jsonError) {
                     console.error('Error parsing AI response:', jsonError);
-                    // Continue with regular results if AI parsing fails
+                    // Added log: AI parsing error
+                    console.log('[Candidate Search] AI response parsing failed. Falling back to regular results.');
                 }
             } catch (aiError) {
                 console.error('Error using AI for candidate ranking:', aiError);
-                // Continue with regular results if AI fails
+                // Added log: AI API error
+                console.log('[Candidate Search] AI API call failed. Falling back to regular results.');
             }
         }
         
         // Regular search results without AI enhancement
+        // Added log: Returning regular results
+        console.log(`[Candidate Search] Returning ${candidates.length} candidates (AI not used or failed).`);
         return res.json({
-            candidates,
+            candidates, // Already filtered by experience if applicable
             totalCount: candidates.length,
             aiEnhanced: false
         });
         
     } catch (error) {
-        console.error('Error searching for candidates:', error);
+        // Added log: General error
+        console.error('[Candidate Search] Error searching for candidates:', error);
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 });

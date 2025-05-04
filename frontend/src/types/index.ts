@@ -3,7 +3,7 @@ export interface User {
     id: string;
     name: string;
     email: string;
-    type: 'jobseeker' | 'employer';
+    type: 'jobseeker' | 'employer' | 'admin';
     firstName?: string;
     lastName?: string;
     companyName?: string;
@@ -71,6 +71,7 @@ export interface Job {
     type: 'full-time' | 'part-time' | 'contract' | 'internship';
     employer: string | User;
     bookmarkedBy: string[];
+    isBookmarked?: boolean;
     createdAt: string;
     updatedAt: string;
 }
@@ -115,9 +116,27 @@ export interface JobApplication {
     jobSeeker: User;
     coverLetter: string;
     resume: string;
-    status: 'pending' | 'reviewed' | 'accepted' | 'rejected';
+    status: 'pending' | 'reviewed' | 'accepted' | 'rejected' | 'interview';
     appliedAt: string;
     updatedAt: string;
+    interviewRatings?: Array<{
+        _id: string;
+        rating: number;
+        technicalSkills?: number;
+        communication?: number;
+        culturalFit?: number;
+        problemSolving?: number;
+        strengths: string[];
+        weaknesses: string[];
+        feedback: string;
+        interviewer: string | User;
+        createdAt: string;
+    }>;
+    applicationHistory?: Array<{
+        status: string;
+        date: string;
+        note?: string;
+    }>;
 }
 
 export interface SkillAssessmentQuestion {
@@ -149,4 +168,21 @@ export interface SkillAssessment {
     };
     createdAt: string;
     completedAt?: string;
+}
+
+export interface JobAlert {
+    _id: string;
+    name: string;
+    keywords: string[];
+    locations: string[];
+    jobTypes: string[];
+    salary: {
+        min: number;
+        max: number;
+        currency: string;
+    };
+    isActive: boolean;
+    frequency: string;
+    createdAt: string;
+    lastSent: string | null;
 } 

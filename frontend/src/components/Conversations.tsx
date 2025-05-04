@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { messageService, userService } from '../services/api';
+import io from 'socket.io-client';
 import {
     Container,
     Typography,
     Paper,
     List,
-    ListItem,
     ListItemAvatar,
     ListItemText,
     ListItemButton,
@@ -15,11 +16,21 @@ import {
     CircularProgress,
     Badge,
     Box,
-    IconButton
+    Alert
 } from '@mui/material';
 import { format } from 'date-fns';
 import MessageIcon from '@mui/icons-material/Message';
 import BusinessIcon from '@mui/icons-material/Business';
+
+interface Message {
+    _id: string;
+    sender: string;
+    receiver: string;
+    content: string;
+    relatedJob?: string;
+    isRead: boolean;
+    createdAt: string;
+}
 
 interface Conversation {
     user: {
@@ -40,31 +51,137 @@ const Conversations: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const navigate = useNavigate();
+    const { user } = useAuth();
+    console.log('[Conversations] Component rendered.');
+
+    const fetchConversations = useCallback(async () => {
+        if (!user) return;
+        setLoading(true);
+        try {
+            console.log('[Conversations] Fetching conversations...');
+            const response = await messageService.getConversations();
+            console.log('[Conversations] Fetched conversations data:', response);
+            const sortedResponse = response.sort((a: Conversation, b: Conversation) => 
+                new Date(b.latestMessage.createdAt).getTime() - new Date(a.latestMessage.createdAt).getTime()
+            );
+            setConversations(sortedResponse);
+            setError(null);
+        } catch (err: any) {
+            console.error('Error fetching conversations:', err);
+            setError(err.response?.data?.message || 'Failed to load conversations');
+        } finally {
+            setLoading(false);
+        }
+    }, [user]);
 
     useEffect(() => {
-        const fetchConversations = async () => {
-            try {
-                setLoading(true);
-                const response = await api.get('/messages/conversations/list');
-                setConversations(response.data);
-                setError(null);
-            } catch (err) {
-                console.error('Error fetching conversations:', err);
-                setError('Failed to load conversations. Please try again.');
-            } finally {
-                setLoading(false);
-            }
+        if (user) {
+            fetchConversations();
+        }
+
+        if (!user?.id) {
+            console.log('[Conversations] No user ID, skipping WebSocket setup.');
+            return;
+        }
+
+        const socketIoUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+        console.log('[Conversations] Attempting to connect socket to:', socketIoUrl);
+        const socket = io(socketIoUrl, { path: '/socket.io/' });
+
+        const roomName = `user_${user.id}`;
+        console.log(`[Conversations] Emitting 'joinChat' to join room: ${roomName}`);
+        socket.emit('joinChat', roomName);
+
+        const handleNewMessage = (newMessage: Message) => {
+            console.log('[Conversations] Received newMessage via socket:', newMessage);
+            
+            setConversations(prevConversations => {
+                if (!user?.id) return prevConversations; 
+        
+                const otherUserId = newMessage.sender === user.id ? newMessage.receiver : newMessage.sender;
+                const isIncoming = newMessage.receiver === user.id;
+        
+                // Check if conversation exists in CURRENT state
+                const existingIndex = prevConversations.findIndex(c => c.user._id === otherUserId);
+                
+                // If exists, update existing
+                if (existingIndex > -1) {
+                    console.log(`[Conversations] Updating existing conversation for ${otherUserId}`);
+                    return prevConversations.map(convo => 
+                        convo.user._id === otherUserId ? {
+                            ...convo,
+                            latestMessage: {
+                                content: newMessage.content,
+                                createdAt: newMessage.createdAt
+                            },
+                            unreadCount: isIncoming ? convo.unreadCount + 1 : convo.unreadCount
+                        } : convo
+                    ).sort(sortConversations);
+                }
+        
+                // Add TEMPORARY entry first if it doesn't exist
+                console.log(`[Conversations] New message from a new conversation (${otherUserId}). Adding temporary entry.`);
+                const tempConvo: Conversation = {
+                    user: {
+                        _id: otherUserId,
+                        name: 'Loading...', // Temporary name
+                        type: 'jobseeker' // Default type, will be updated
+                    },
+                    latestMessage: {
+                        content: newMessage.content,
+                        createdAt: newMessage.createdAt
+                    },
+                    unreadCount: isIncoming ? 1 : 0
+                };
+        
+                // Return immediately with temp entry added
+                const updatedWithTemp = [...prevConversations, tempConvo].sort(sortConversations);
+        
+                // Then fetch user details async and replace temp entry
+                userService.getUserById(otherUserId).then(otherUserDetails => {
+                    console.log(`[Conversations] User details fetched for ${otherUserId}. Updating temporary entry.`);
+                    setConversations(currentConvos => 
+                        currentConvos.map(convo => 
+                            convo.user._id === otherUserId ? {
+                                ...convo, // Keep latestMessage & unreadCount from tempConvo
+                                user: { // Update user details
+                                    _id: otherUserDetails._id,
+                                    name: otherUserDetails.name,
+                                    type: otherUserDetails.type,
+                                    companyName: otherUserDetails.companyName
+                                }
+                            } : convo
+                        ).sort(sortConversations)
+                    );
+                }).catch(err => {
+                    console.error(`[Conversations] Failed to fetch user details for ${otherUserId}:`, err);
+                    // Optionally remove the temp entry or show an error state
+                     setConversations(currentConvos => 
+                         currentConvos.filter(convo => convo.user._id !== otherUserId).sort(sortConversations)
+                     );
+                });
+        
+                return updatedWithTemp; // Return state with temporary entry
+            });
         };
 
-        fetchConversations();
-        
-        // Poll for new messages
-        const interval = setInterval(fetchConversations, 30000);
-        
-        return () => clearInterval(interval);
-    }, []);
+        socket.on('newMessage', handleNewMessage);
+        socket.on('connect', () => console.log('[Conversations] Socket connected:', socket.id));
+        socket.on('disconnect', (reason: string) => console.log('[Conversations] Socket disconnected:', reason));
+        socket.on('connect_error', (err: Error) => console.error('[Conversations] Socket connection error:', err));
+
+        return () => {
+            console.log('[Conversations] Cleaning up: Disconnecting socket and removing listeners...');
+            socket.off('newMessage', handleNewMessage);
+            socket.off('connect');
+            socket.off('disconnect');
+            socket.off('connect_error');
+            socket.disconnect();
+        };
+    }, [user, fetchConversations]);
 
     const handleConversationClick = (userId: string) => {
+        console.log(`[Conversations] Navigating to chat with user ID: ${userId}`);
         navigate(`/messages/${userId}`);
     };
 
@@ -72,19 +189,16 @@ const Conversations: React.FC = () => {
         const date = new Date(timestamp);
         const now = new Date();
         
-        // If today, show time
         if (date.toDateString() === now.toDateString()) {
             return format(date, 'h:mm a');
         }
         
-        // If within a week, show day name
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
         if (date > weekAgo) {
             return format(date, 'EEEE');
         }
         
-        // Otherwise show date
         return format(date, 'MMM d');
     };
 
@@ -96,6 +210,10 @@ const Conversations: React.FC = () => {
             .toUpperCase()
             .substring(0, 2);
     };
+
+    // Add this helper function
+    const sortConversations = (a: Conversation, b: Conversation) => 
+        new Date(b.latestMessage.createdAt).getTime() - new Date(a.latestMessage.createdAt).getTime();
 
     if (loading) {
         return (
@@ -116,9 +234,9 @@ const Conversations: React.FC = () => {
                 </Typography>
                 
                 {error && (
-                    <Typography color="error" sx={{ mb: 2 }}>
+                    <Alert severity="error" sx={{ mb: 2 }}>
                         {error}
-                    </Typography>
+                    </Alert>
                 )}
                 
                 {conversations.length === 0 ? (

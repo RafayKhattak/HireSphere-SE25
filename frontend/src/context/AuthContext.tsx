@@ -49,6 +49,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const response = await authService.register(data);
             setUser(response.user);
+            setToken(response.token);
+            setIsAuthenticated(true);
+            localStorage.setItem('token', response.token);
+            localStorage.setItem('user', JSON.stringify(response.user));
         } catch (error) {
             throw error;
         }
